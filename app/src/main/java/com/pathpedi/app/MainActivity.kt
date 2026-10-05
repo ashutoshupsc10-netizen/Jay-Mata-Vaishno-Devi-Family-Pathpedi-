@@ -1,9 +1,14 @@
 package com.pathpedi.app
 
 import android.annotation.SuppressLint
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
+import android.util.Base64
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -12,6 +17,7 @@ import android.webkit.WebViewClient
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
+import java.io.FileOutputStream
 
 class MainActivity : AppCompatActivity() {
 
@@ -33,30 +39,20 @@ class MainActivity : AppCompatActivity() {
             cacheMode = WebSettings.LOAD_DEFAULT
         }
 
-        // Android bridge
         webView.addJavascriptInterface(
             PrintBridge(this),
             "AndroidPrint"
         )
 
         webView.webViewClient = object : WebViewClient() {
-
-            override fun onPageFinished(
-                view: WebView?,
-                url: String?
-            ) {
+            override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
 
-                // HTML ka window.print() Android Print Preview ko
-                // hamare custom preview screen par bhejega.
                 view?.evaluateJavascript(
                     """
                     (function() {
                         window.print = function() {
-                            if (
-                                window.AndroidPrint &&
-                                AndroidPrint.print
-                            ) {
+                            if (window.AndroidPrint && AndroidPrint.print) {
                                 AndroidPrint.print();
                             }
                         };
@@ -68,26 +64,16 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.webChromeClient = WebChromeClient()
-
         setContentView(webView)
 
-        // Pathpedi HTML
-        webView.loadUrl(
-            "file:///android_asset/Pathpedi.html"
-        )
+        webView.loadUrl("file:///android_asset/Pathpedi.html")
 
-        // Android Back handling
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
-
                 override fun handleOnBackPressed() {
-
                     if (webView.canGoBack()) {
                         webView.goBack()
-                    } else {
-                        // Main screen par Back se app close/background
-                        // nahi karenge.
                     }
                 }
             }
@@ -96,10 +82,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-
         if (::webView.isInitialized) {
             webView.visibility = WebView.VISIBLE
-
             webView.postDelayed({
                 if (!isFinishing && !isDestroyed) {
                     webView.requestFocus()
@@ -108,126 +92,141 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * JavaScript → Android bridge
-     */
     private class PrintBridge(
         private val context: Context
     ) {
 
         @JavascriptInterface
         fun print() {
-
-            val activity =
-                context as? MainActivity ?: return
-
+            val activity = context as? MainActivity ?: return
             activity.runOnUiThread {
-
-                // Current Pathpedi page ka complete HTML
                 activity.webView.evaluateJavascript(
                     "(function(){return document.documentElement.outerHTML;})()"
                 ) { htmlResult ->
-
                     try {
-
-                        // evaluateJavascript JSON string return karta hai,
-                        // isliye quotes/unicode decode kar rahe hain.
                         val html = decodeJsString(htmlResult)
-
-                        // Temporary HTML file
                         val file = File(
                             activity.cacheDir,
                             "pathpedi_print_preview.html"
                         )
+                        file.writeText(html, Charsets.UTF_8)
 
-                        file.writeText(
-                            html,
-                            Charsets.UTF_8
-                        )
-
-                        // Custom in-app Print Preview
                         val intent = Intent(
                             activity,
                             PrintPreviewActivity::class.java
                         )
-
-                        intent.putExtra(
-                            "HTML_FILE",
-                            file.absolutePath
-                        )
-
+                        intent.putExtra("HTML_FILE", file.absolutePath)
                         activity.startActivity(intent)
-
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
                 }
             }
         }
-@JavascriptInterface
-fun printHtml(html: String) {
 
-    val activity = context as? MainActivity ?: return
+        @JavascriptInterface
+        fun printHtml(html: String) {
+            val activity = context as? MainActivity ?: return
+            activity.runOnUiThread {
+                try {
+                    val file = File(
+                        activity.cacheDir,
+                        "pathpedi_daybook_print.html"
+                    )
+                    file.writeText(html, Charsets.UTF_8)
 
-    activity.runOnUiThread {
-
-        try {
-
-            // Temporary HTML file
-            val file = File(
-                activity.cacheDir,
-                "pathpedi_daybook_print.html"
-            )
-
-            file.writeText(
-                html,
-                Charsets.UTF_8
-            )
-
-            // Custom in-app Print Preview
-            val intent = Intent(
-                activity,
-                PrintPreviewActivity::class.java
-            )
-
-            intent.putExtra(
-                "HTML_FILE",
-                file.absolutePath
-            )
-
-            activity.startActivity(intent)
-
-        } catch (e: Exception) {
-
-            e.printStackTrace()
-
+                    val intent = Intent(
+                        activity,
+                        PrintPreviewActivity::class.java
+                    )
+                    intent.putExtra("HTML_FILE", file.absolutePath)
+                    activity.startActivity(intent)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
-    }
-}
-        private fun decodeJsString(
-            value: String
-        ): String {
 
+        /**
+         * Save CSV generated by Pathpedi HTML into the public
+         * Downloads/Pathpedi folder on Android 10+.
+         */
+        @JavascriptInterface
+        fun saveCSV(filename: String, base64Data: String) {
+            val activity = context as? MainActivity ?: return
+
+            try {
+                val safeName = filename
+                    .replace("/", "_")
+                    .replace("\\", "_")
+                    .ifBlank { "pathpedi_export.csv" }
+
+                val bytes = Base64.decode(base64Data, Base64.DEFAULT)
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val values = ContentValues().apply {
+                        put(MediaStore.Downloads.DISPLAY_NAME, safeName)
+                        put(MediaStore.Downloads.MIME_TYPE, "text/csv")
+                        put(
+                            MediaStore.Downloads.RELATIVE_PATH,
+                            Environment.DIRECTORY_DOWNLOADS + "/Pathpedi"
+                        )
+                        put(MediaStore.Downloads.IS_PENDING, 1)
+                    }
+
+                    val resolver = activity.contentResolver
+                    val uri = resolver.insert(
+                        MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                        values
+                    ) ?: throw Exception("Could not create CSV file")
+
+                    try {
+                        resolver.openOutputStream(uri)?.use { output ->
+                            output.write(bytes)
+                            output.flush()
+                        } ?: throw Exception("Could not open CSV output stream")
+
+                        val done = ContentValues().apply {
+                            put(MediaStore.Downloads.IS_PENDING, 0)
+                        }
+                        resolver.update(uri, done, null, null)
+                    } catch (e: Exception) {
+                        resolver.delete(uri, null, null)
+                        throw e
+                    }
+
+                    activity.runOnUiThread {
+                        // HTML already shows the user-facing toast.
+                    }
+                } else {
+                    // Older Android fallback. Android 10+ is the normal supported path.
+                    val downloads = Environment.getExternalStoragePublicDirectory(
+                        Environment.DIRECTORY_DOWNLOADS
+                    )
+                    val folder = File(downloads, "Pathpedi")
+                    if (!folder.exists()) folder.mkdirs()
+                    val file = File(folder, safeName)
+                    FileOutputStream(file).use { it.write(bytes) }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        private fun decodeJsString(value: String): String {
             if (
                 value.length >= 2 &&
                 value.first() == '"' &&
                 value.last() == '"'
             ) {
                 return try {
-
                     org.json.JSONTokener(value)
                         .nextValue()
                         .toString()
-
                 } catch (e: Exception) {
-
-                    value.substring(
-                        1,
-                        value.length - 1
-                    )
+                    value.substring(1, value.length - 1)
                 }
             }
-
             return value
         }
     }
