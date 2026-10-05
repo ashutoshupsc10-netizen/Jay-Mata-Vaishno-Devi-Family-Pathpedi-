@@ -2,9 +2,8 @@ package com.pathpedi.app
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
-import android.print.PrintAttributes
-import android.print.PrintManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -12,6 +11,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
@@ -21,9 +21,6 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // =========================
-        // WEBVIEW
-        // =========================
         webView = WebView(this)
 
         webView.settings.apply {
@@ -32,20 +29,16 @@ class MainActivity : AppCompatActivity() {
             databaseEnabled = true
             allowFileAccess = true
             allowContentAccess = true
+            javaScriptCanOpenWindowsAutomatically = true
             cacheMode = WebSettings.LOAD_DEFAULT
         }
 
-        // =========================
-        // ANDROID BRIDGE
-        // =========================
+        // Android bridge
         webView.addJavascriptInterface(
             PrintBridge(this),
             "AndroidPrint"
         )
 
-        // =========================
-        // WEBVIEW CLIENT
-        // =========================
         webView.webViewClient = object : WebViewClient() {
 
             override fun onPageFinished(
@@ -54,7 +47,8 @@ class MainActivity : AppCompatActivity() {
             ) {
                 super.onPageFinished(view, url)
 
-                // HTML window.print() -> Android native print
+                // HTML ka window.print() Android Print Preview ko
+                // hamare custom preview screen par bhejega.
                 view?.evaluateJavascript(
                     """
                     (function() {
@@ -75,18 +69,14 @@ class MainActivity : AppCompatActivity() {
 
         webView.webChromeClient = WebChromeClient()
 
-        // =========================
-        // LOAD PATHPEDI HTML
-        // =========================
+        setContentView(webView)
+
+        // Pathpedi HTML
         webView.loadUrl(
             "file:///android_asset/Pathpedi.html"
         )
 
-        setContentView(webView)
-
-        // =========================
-        // MODERN BACK HANDLING
-        // =========================
+        // Android Back handling
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
@@ -94,43 +84,33 @@ class MainActivity : AppCompatActivity() {
                 override fun handleOnBackPressed() {
 
                     if (webView.canGoBack()) {
-
                         webView.goBack()
-
                     } else {
-
-                        // Do NOT close / background the app.
-                        // Stay on the Pathpedi main screen.
+                        // Main screen par Back se app close/background
+                        // nahi karenge.
                     }
                 }
             }
         )
     }
 
-    // =========================
-    // RESTORE WEBVIEW AFTER
-    // PRINT PREVIEW
-    // =========================
     override fun onResume() {
         super.onResume()
 
         if (::webView.isInitialized) {
-
             webView.visibility = WebView.VISIBLE
 
             webView.postDelayed({
-
                 if (!isFinishing && !isDestroyed) {
                     webView.requestFocus()
                 }
-
-            }, 300)
+            }, 200)
         }
     }
 
-    // =========================
-    // PRINT BRIDGE
-    // =========================
+    /**
+     * JavaScript → Android bridge
+     */
     private class PrintBridge(
         private val context: Context
     ) {
@@ -143,41 +123,73 @@ class MainActivity : AppCompatActivity() {
 
             activity.runOnUiThread {
 
-                val printManager =
-                    activity.getSystemService(
-                        Context.PRINT_SERVICE
-                    ) as PrintManager
+                // Current Pathpedi page ka complete HTML
+                activity.webView.evaluateJavascript(
+                    "(function(){return document.documentElement.outerHTML;})()"
+                ) { htmlResult ->
 
-                val printAdapter =
-                    activity.webView
-                        .createPrintDocumentAdapter(
-                            "Pathpedi Statement"
+                    try {
+
+                        // evaluateJavascript JSON string return karta hai,
+                        // isliye quotes/unicode decode kar rahe hain.
+                        val html = decodeJsString(htmlResult)
+
+                        // Temporary HTML file
+                        val file = File(
+                            activity.cacheDir,
+                            "pathpedi_print_preview.html"
                         )
 
-                val attributes =
-                    PrintAttributes.Builder()
-                        .setMediaSize(
-                            PrintAttributes.MediaSize.ISO_A4
+                        file.writeText(
+                            html,
+                            Charsets.UTF_8
                         )
-                        .setResolution(
-                            PrintAttributes.Resolution(
-                                "pathpedi_print",
-                                "Pathpedi Print",
-                                300,
-                                300
-                            )
-                        )
-                        .setMinMargins(
-                            PrintAttributes.Margins.NO_MARGINS
-                        )
-                        .build()
 
-                printManager.print(
-                    "Pathpedi Statement",
-                    printAdapter,
-                    attributes
-                )
+                        // Custom in-app Print Preview
+                        val intent = Intent(
+                            activity,
+                            PrintPreviewActivity::class.java
+                        )
+
+                        intent.putExtra(
+                            "HTML_FILE",
+                            file.absolutePath
+                        )
+
+                        activity.startActivity(intent)
+
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
             }
+        }
+
+        private fun decodeJsString(
+            value: String
+        ): String {
+
+            if (
+                value.length >= 2 &&
+                value.first() == '"' &&
+                value.last() == '"'
+            ) {
+                return try {
+
+                    org.json.JSONTokener(value)
+                        .nextValue()
+                        .toString()
+
+                } catch (e: Exception) {
+
+                    value.substring(
+                        1,
+                        value.length - 1
+                    )
+                }
+            }
+
+            return value
         }
     }
 }
