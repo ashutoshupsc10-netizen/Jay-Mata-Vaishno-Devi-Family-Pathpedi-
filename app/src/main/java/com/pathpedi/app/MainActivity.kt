@@ -164,7 +164,46 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+@JavascriptInterface
+fun printHtml(html: String) {
 
+    val activity = context as? MainActivity ?: return
+
+    activity.runOnUiThread {
+
+        try {
+
+            // Temporary HTML file
+            val file = File(
+                activity.cacheDir,
+                "pathpedi_daybook_print.html"
+            )
+
+            file.writeText(
+                html,
+                Charsets.UTF_8
+            )
+
+            // Custom in-app Print Preview
+            val intent = Intent(
+                activity,
+                PrintPreviewActivity::class.java
+            )
+
+            intent.putExtra(
+                "HTML_FILE",
+                file.absolutePath
+            )
+
+            activity.startActivity(intent)
+
+        } catch (e: Exception) {
+
+            e.printStackTrace()
+
+        }
+    }
+}
         private fun decodeJsString(
             value: String
         ): String {
