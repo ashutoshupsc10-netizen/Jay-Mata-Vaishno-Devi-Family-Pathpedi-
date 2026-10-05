@@ -64,7 +64,7 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun print() {
-            val activity = context as? AppCompatActivity ?: return
+            val activity = context as? MainActivity ?: return
 
             activity.runOnUiThread {
                 val printManager =
