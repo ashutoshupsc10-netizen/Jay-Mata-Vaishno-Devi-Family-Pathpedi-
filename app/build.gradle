@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace 'com.example.pathpedi'
+    namespace 'com.pathpedi.app'
     compileSdk 35
 
     defaultConfig {
-        applicationId 'com.example.pathpedi'
+        applicationId 'com.pathpedi.app'
         minSdk 23
         targetSdk 35
         versionCode 1
