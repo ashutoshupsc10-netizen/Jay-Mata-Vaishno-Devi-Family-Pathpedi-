@@ -1,6 +1,5 @@
 package com.pathpedi.app
 
-import android.app.Activity
 import android.content.Context
 import android.os.Bundle
 import android.print.PrintAttributes
@@ -18,6 +17,7 @@ import java.io.File
 class PrintPreviewActivity : AppCompatActivity() {
 
     private lateinit var previewWebView: WebView
+
     private var printInProgress = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,7 +43,6 @@ class PrintPreviewActivity : AppCompatActivity() {
 
     private fun createScreen() {
 
-        // Main vertical layout
         val root = LinearLayout(this)
 
         root.orientation =
@@ -74,7 +73,7 @@ class PrintPreviewActivity : AppCompatActivity() {
             8
         )
 
-        // Back button
+        // BACK BUTTON
         val backButton = Button(this)
 
         backButton.text = "← Back"
@@ -91,7 +90,7 @@ class PrintPreviewActivity : AppCompatActivity() {
             )
         )
 
-        // Title
+        // TITLE
         val title = TextView(this)
 
         title.text =
@@ -115,7 +114,7 @@ class PrintPreviewActivity : AppCompatActivity() {
 
         toolbar.addView(title)
 
-        // Print button
+        // PRINT BUTTON
         val printButton = Button(this)
 
         printButton.text = "Print"
@@ -178,79 +177,85 @@ class PrintPreviewActivity : AppCompatActivity() {
         setContentView(root)
     }
 
-    /**
-     * Android System Print
-     *
-     * Important:
-     * System print preview ab MainActivity ke
-     * upar directly nahi khulega.
-     *
-     * Ye custom PrintPreviewActivity ke upar khulega.
-     *
-     * System preview se Back karne par
-     * PrintPreviewActivity return hogi.
-     */
+    // -----------------------------------------
+    // PRINT DOCUMENT
+    // -----------------------------------------
+
     private fun printDocument() {
+
         printInProgress = true
 
-    val printManager =
-        getSystemService(Context.PRINT_SERVICE) as PrintManager
+        val printManager =
+            getSystemService(
+                Context.PRINT_SERVICE
+            ) as PrintManager
 
-    val printAdapter =
-        previewWebView.createPrintDocumentAdapter(
-            "Pathpedi Statement"
-        )
-
-    val attributes =
-        PrintAttributes.Builder()
-            .setMediaSize(
-                PrintAttributes.MediaSize.ISO_A4
+        val printAdapter =
+            previewWebView.createPrintDocumentAdapter(
+                "Pathpedi Statement"
             )
-            .setResolution(
-                PrintAttributes.Resolution(
-                    "pathpedi_print",
-                    "Pathpedi Print",
-                    300,
-                    300
+
+        val attributes =
+            PrintAttributes.Builder()
+                .setMediaSize(
+                    PrintAttributes.MediaSize.ISO_A4
                 )
-            )
-            .setMinMargins(
-                PrintAttributes.Margins.NO_MARGINS
-            )
-            .build()
+                .setResolution(
+                    PrintAttributes.Resolution(
+                        "pathpedi_print",
+                        "Pathpedi Print",
+                        300,
+                        300
+                    )
+                )
+                .setMinMargins(
+                    PrintAttributes.Margins.NO_MARGINS
+                )
+                .build()
 
-    printManager.print(
-        "Pathpedi Statement",
-        printAdapter,
-        attributes
-    )
+        printManager.print(
+            "Pathpedi Statement",
+            printAdapter,
+            attributes
+        )
+    }
+
+    // -----------------------------------------
+    // SYSTEM PRINT PREVIEW RETURN
+    // -----------------------------------------
 
     override fun onResume() {
-    super.onResume()
 
-    if (printInProgress) {
+        super.onResume()
 
-        printInProgress = false
+        if (printInProgress) {
 
-        window.decorView.postDelayed({
+            printInProgress = false
 
-            if (!isFinishing && !isDestroyed) {
-                finish()
-            }
+            window.decorView.postDelayed({
 
-        }, 300)
+                if (!isFinishing && !isDestroyed) {
+
+                    finish()
+                }
+
+            }, 300)
+        }
     }
-}
 
-    /**
-     * Android Back
-     *
-     * PrintPreviewActivity se Back
-     * directly MainActivity par jayega.
-     */
+    // -----------------------------------------
+    // BACK
+    // -----------------------------------------
+
+    @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
+
         finish()
     }
+
+    // -----------------------------------------
+    // CLEANUP
+    // -----------------------------------------
 
     override fun onDestroy() {
 
