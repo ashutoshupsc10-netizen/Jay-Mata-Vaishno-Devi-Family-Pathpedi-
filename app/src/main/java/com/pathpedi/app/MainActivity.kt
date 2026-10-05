@@ -96,11 +96,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            super.onBackPressed()
-        }
+override fun onBackPressed() {
+    if (webView.canGoBack()) {
+        webView.goBack()
+    } else {
+        moveTaskToBack(true)
     }
+}
 }
