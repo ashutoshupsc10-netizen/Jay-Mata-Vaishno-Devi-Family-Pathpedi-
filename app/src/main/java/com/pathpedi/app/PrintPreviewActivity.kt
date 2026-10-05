@@ -191,40 +191,50 @@ class PrintPreviewActivity : AppCompatActivity() {
      */
     private fun printDocument() {
 
-        val printManager =
-            getSystemService(
-                Context.PRINT_SERVICE
-            ) as PrintManager
+    val printManager =
+        getSystemService(Context.PRINT_SERVICE) as PrintManager
 
-        val printAdapter =
-            previewWebView.createPrintDocumentAdapter(
-                "Pathpedi Statement"
-            )
-
-        val attributes =
-            PrintAttributes.Builder()
-                .setMediaSize(
-                    PrintAttributes.MediaSize.ISO_A4
-                )
-                .setResolution(
-                    PrintAttributes.Resolution(
-                        "pathpedi_print",
-                        "Pathpedi Print",
-                        300,
-                        300
-                    )
-                )
-                .setMinMargins(
-                    PrintAttributes.Margins.NO_MARGINS
-                )
-                .build()
-
-        printManager.print(
-            "Pathpedi Statement",
-            printAdapter,
-            attributes
+    val printAdapter =
+        previewWebView.createPrintDocumentAdapter(
+            "Pathpedi Statement"
         )
-    }
+
+    val attributes =
+        PrintAttributes.Builder()
+            .setMediaSize(
+                PrintAttributes.MediaSize.ISO_A4
+            )
+            .setResolution(
+                PrintAttributes.Resolution(
+                    "pathpedi_print",
+                    "Pathpedi Print",
+                    300,
+                    300
+                )
+            )
+            .setMinMargins(
+                PrintAttributes.Margins.NO_MARGINS
+            )
+            .build()
+
+    printManager.print(
+        "Pathpedi Statement",
+        printAdapter,
+        attributes
+    )
+
+    // Remove the custom Print Preview Activity
+    // from the Android back stack.
+    // After pressing Back in Android Print Preview,
+    // the user will return directly to Pathpedi.
+    window.decorView.postDelayed({
+
+        if (!isFinishing && !isDestroyed) {
+            finish()
+        }
+
+    }, 1000)
+}
 
     /**
      * Android Back
