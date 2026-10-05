@@ -18,6 +18,7 @@ import java.io.File
 class PrintPreviewActivity : AppCompatActivity() {
 
     private lateinit var previewWebView: WebView
+    private var printInProgress = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -190,6 +191,7 @@ class PrintPreviewActivity : AppCompatActivity() {
      * PrintPreviewActivity return hogi.
      */
     private fun printDocument() {
+        printInProgress = true
 
     val printManager =
         getSystemService(Context.PRINT_SERVICE) as PrintManager
@@ -223,17 +225,21 @@ class PrintPreviewActivity : AppCompatActivity() {
         attributes
     )
 
-    // Remove the custom Print Preview Activity
-    // from the Android back stack.
-    // After pressing Back in Android Print Preview,
-    // the user will return directly to Pathpedi.
-    window.decorView.postDelayed({
+    override fun onResume() {
+    super.onResume()
 
-        if (!isFinishing && !isDestroyed) {
-            finish()
-        }
+    if (printInProgress) {
 
-    }, 1000)
+        printInProgress = false
+
+        window.decorView.postDelayed({
+
+            if (!isFinishing && !isDestroyed) {
+                finish()
+            }
+
+        }, 300)
+    }
 }
 
     /**
