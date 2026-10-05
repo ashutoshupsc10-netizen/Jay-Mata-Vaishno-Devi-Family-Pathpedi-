@@ -10,6 +10,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
@@ -20,6 +21,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // =========================
+        // WEBVIEW
+        // =========================
         webView = WebView(this)
 
         webView.settings.apply {
@@ -31,19 +35,34 @@ class MainActivity : AppCompatActivity() {
             cacheMode = WebSettings.LOAD_DEFAULT
         }
 
-        webView.addJavascriptInterface(PrintBridge(this), "AndroidPrint")
+        // =========================
+        // ANDROID BRIDGE
+        // =========================
+        webView.addJavascriptInterface(
+            PrintBridge(this),
+            "AndroidPrint"
+        )
 
+        // =========================
+        // WEBVIEW CLIENT
+        // =========================
         webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView?, url: String?) {
+
+            override fun onPageFinished(
+                view: WebView?,
+                url: String?
+            ) {
                 super.onPageFinished(view, url)
 
-                // Existing window.print() calls in the HTML will use
-                // Android's native Print/PDF system.
+                // HTML window.print() -> Android native print
                 view?.evaluateJavascript(
                     """
                     (function() {
                         window.print = function() {
-                            if (window.AndroidPrint && AndroidPrint.print) {
+                            if (
+                                window.AndroidPrint &&
+                                AndroidPrint.print
+                            ) {
                                 AndroidPrint.print();
                             }
                         };
@@ -55,36 +74,103 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.webChromeClient = WebChromeClient()
-        webView.loadUrl("file:///android_asset/Pathpedi.html")
+
+        // =========================
+        // LOAD PATHPEDI HTML
+        // =========================
+        webView.loadUrl(
+            "file:///android_asset/Pathpedi.html"
+        )
 
         setContentView(webView)
+
+        // =========================
+        // MODERN BACK HANDLING
+        // =========================
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+
+                override fun handleOnBackPressed() {
+
+                    if (webView.canGoBack()) {
+
+                        webView.goBack()
+
+                    } else {
+
+                        // Do NOT close / background the app.
+                        // Stay on the Pathpedi main screen.
+                    }
+                }
+            }
+        )
     }
 
-    private class PrintBridge(private val context: Context) {
+    // =========================
+    // RESTORE WEBVIEW AFTER
+    // PRINT PREVIEW
+    // =========================
+    override fun onResume() {
+        super.onResume()
+
+        if (::webView.isInitialized) {
+
+            webView.visibility = WebView.VISIBLE
+
+            webView.postDelayed({
+
+                if (!isFinishing && !isDestroyed) {
+                    webView.requestFocus()
+                }
+
+            }, 300)
+        }
+    }
+
+    // =========================
+    // PRINT BRIDGE
+    // =========================
+    private class PrintBridge(
+        private val context: Context
+    ) {
 
         @JavascriptInterface
         fun print() {
-            val activity = context as? MainActivity ?: return
+
+            val activity =
+                context as? MainActivity ?: return
 
             activity.runOnUiThread {
+
                 val printManager =
-                    activity.getSystemService(Context.PRINT_SERVICE) as PrintManager
+                    activity.getSystemService(
+                        Context.PRINT_SERVICE
+                    ) as PrintManager
 
                 val printAdapter =
-                    activity.webView.createPrintDocumentAdapter("Pathpedi Statement")
-
-                val attributes = PrintAttributes.Builder()
-                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-                    .setResolution(
-                        PrintAttributes.Resolution(
-                            "pathpedi_print",
-                            "Pathpedi Print",
-                            300,
-                            300
+                    activity.webView
+                        .createPrintDocumentAdapter(
+                            "Pathpedi Statement"
                         )
-                    )
-                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
-                    .build()
+
+                val attributes =
+                    PrintAttributes.Builder()
+                        .setMediaSize(
+                            PrintAttributes.MediaSize.ISO_A4
+                        )
+                        .setResolution(
+                            PrintAttributes.Resolution(
+                                "pathpedi_print",
+                                "Pathpedi Print",
+                                300,
+                                300
+                            )
+                        )
+                        .setMinMargins(
+                            PrintAttributes.Margins.NO_MARGINS
+                        )
+                        .build()
 
                 printManager.print(
                     "Pathpedi Statement",
@@ -94,11 +180,4 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-
-    @Deprecated("Deprecated in Java")
-override fun onBackPressed() {
-    if (webView.canGoBack()) {
-        webView.goBack()
-    }
-}
 }
