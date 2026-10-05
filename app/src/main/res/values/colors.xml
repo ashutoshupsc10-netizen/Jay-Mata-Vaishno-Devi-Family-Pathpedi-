@@ -1,1 +1,3 @@
-color xml
+<resources>
+    <color name="app_background">#F8FAFC</color>
+</resources>
