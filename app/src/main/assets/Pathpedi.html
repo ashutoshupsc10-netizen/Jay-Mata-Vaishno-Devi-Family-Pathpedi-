@@ -3101,7 +3101,78 @@ document.getElementById('saveMonthlyCloseBtn')?.addEventListener('click',saveMon
     function p6SaveClosing(){const day=document.getElementById('p6DayDate')?.value||today(),c=p6Calc(day),oc=Number(document.getElementById('p6OpeningCash')?.value||0),ob=Number(document.getElementById('p6OpeningBank')?.value||0);if(!Array.isArray(data.dailyClosings))data.dailyClosings=[];const rec={id:'DC'+Date.now(),transactionId:transactionId('DAY'),date:day,openingCash:oc,openingBank:ob,cashIn:c.ci,cashOut:c.co,bankIn:c.bi,bankOut:c.bo,closingCash:oc+c.ci-c.co,closingBank:ob+c.bi-c.bo,createdAt:new Date().toISOString()};data.dailyClosings.unshift(rec);auditLog('Daily Closing Saved',rec.transactionId,'Daily cash/bank closing saved','',rec.closingCash+rec.closingBank);saveData();p6RenderDayBook();toast('Daily closing saved');}
     function p6SaveTransfer(){const date=document.getElementById('p6TransferDate')?.value||today(),from=document.getElementById('p6TransferFrom')?.value,to=document.getElementById('p6TransferTo')?.value,amount=Number(document.getElementById('p6TransferAmount')?.value||0),note=(document.getElementById('p6TransferNote')?.value||'').trim();if(from===to){toast('From aur To alag hona chahiye');return;}if(amount<=0){toast('Valid amount enter karein');return;}if(!Array.isArray(data.phase6Transfers))data.phase6Transfers=[];const rec={id:'TR'+Date.now(),transactionId:transactionId('TRF'),date,from,to,amount,note,createdAt:new Date().toISOString(),status:'active'};data.phase6Transfers.unshift(rec);auditLog('Cash/Bank Transfer',rec.transactionId,`${from} → ${to}`,'',amount);saveData();document.getElementById('p6TransferAmount').value='';document.getElementById('p6TransferNote').value='';p6RenderDayBook();p6RenderTransfers();toast('Transfer recorded');}
     function p6RenderTransfers(){const el=document.getElementById('p6TransferHistory');if(!el)return;const a=(data.phase6Transfers||[]).slice(0,20);el.innerHTML=a.length?`<table><thead><tr><th>Date</th><th>Ref</th><th>From</th><th>To</th><th>Amount</th><th>Note</th></tr></thead><tbody>${a.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${escapeHtml(x.transactionId||x.id)}</td><td>${escapeHtml(x.from)}</td><td>${escapeHtml(x.to)}</td><td>${fmt(x.amount)}</td><td>${escapeHtml(x.note||'')}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No transfers recorded.</div>';}
-    function p6PrintDayBook(){const html=document.getElementById('p6DayBook')?.innerHTML||'';if(!html){toast('Pehle Day Book calculate karein');return;}const w=window.open('','_blank');if(!w){toast('Print window blocked');return;}w.document.write(`<html><head><title>Daily Day Book</title><style>body{font-family:Arial;padding:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:7px;font-size:12px}th{background:#f2f2f2}</style></head><body><h2>Jay Mata Vaishno Devi Family Pathpedi</h2><h3>Daily Day Book — ${escapeHtml(document.getElementById('p6DayDate')?.value||today())}</h3>${html}<script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();}
+    function p6PrintDayBook(){
+    const content = document.getElementById('p6DayBook')?.innerHTML || '';
+
+    if(!content){
+        toast('Pehle Day Book calculate karein');
+        return;
+    }
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pathpedi Day Book</title>
+<style>
+    body{
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        color: #111;
+        background: #fff;
+    }
+
+    h1,h2,h3{
+        color: #111;
+    }
+
+    table{
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+    }
+
+    th,td{
+        border: 1px solid #555;
+        padding: 7px;
+        text-align: left;
+    }
+
+    th{
+        font-weight: 700;
+        background: #f2f2f2;
+    }
+
+    @media print{
+        body{
+            margin: 10mm;
+        }
+    }
+</style>
+</head>
+<body>
+${content}
+</body>
+</html>`;
+
+    if(window.AndroidPrint && AndroidPrint.printHtml){
+        AndroidPrint.printHtml(html);
+        return;
+    }
+
+    // Browser fallback
+    const w = window.open('', '_blank');
+
+    if(!w){
+        toast('Print window blocked');
+        return;
+    }
+
+    w.document.write(html);
+    w.document.close();
+}
     function p6Init(){const d=document.getElementById('p6DayDate'),td=document.getElementById('p6TransferDate');if(d&&!d.value)d.value=today();if(td&&!td.value)td.value=today();document.getElementById('p6RefreshDayBookBtn')?.addEventListener('click',p6RenderDayBook);document.getElementById('p6SaveClosingBtn')?.addEventListener('click',p6SaveClosing);document.getElementById('p6TransferBtn')?.addEventListener('click',p6SaveTransfer);document.getElementById('p6PrintDayBookBtn')?.addEventListener('click',p6PrintDayBook);document.getElementById('p6OpeningCash')?.addEventListener('input',p6RenderDayBook);document.getElementById('p6OpeningBank')?.addEventListener('input',p6RenderDayBook);d?.addEventListener('change',p6RenderDayBook);p6RenderTransfers();p6RenderDayBook();}
 
     p6Init();
