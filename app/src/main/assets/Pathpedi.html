@@ -2282,19 +2282,49 @@ ${content}
     function renderMonthlyClosingHistory(){ const out=document.getElementById('monthlyCloseHistory'); if(!out)return; const rows=(data.monthlyClosings||[]).slice(0,24); out.innerHTML=rows.length?`<div style="overflow:auto"><table><thead><tr><th>Month</th><th>Deposits</th><th>Repayment</th><th>Interest</th><th>Fine</th><th>Loan Out</th><th>Profit</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${escapeHtml(x.month)}</td><td>${fmt(x.deposit)}</td><td>${fmt(x.repayment)}</td><td>${fmt(x.interest)}</td><td>${fmt(x.lateFine)}</td><td>${fmt(x.loanOut)}</td><td><strong>${fmt(x.totalProfit)}</strong></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No monthly closing saved yet.</div>'; }
 
         // ========== EXPORT ==========
+    // ========== CSV EXPORT / ANDROID DOWNLOAD LOCATION ==========
+    // APK: CSV files are saved to Downloads/Pathpedi/
+    // Browser: normal browser download fallback is used.
     function downloadCSV(filename, rows) {
       const csv = rows.map(r => r.map(c => {
         const s = String(c ?? '');
-        if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+        if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+          return '"' + s.replace(/"/g, '""') + '"';
+        }
         return s;
       }).join(',')).join('\n');
-      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+
+      const csvWithBom = '\ufeff' + csv;
+
+      // Android APK: save directly into public Downloads/Pathpedi/
+      if (window.AndroidPrint && typeof AndroidPrint.saveCSV === 'function') {
+        try {
+          const bytes = new TextEncoder().encode(csvWithBom);
+          let binary = '';
+          const chunkSize = 0x8000;
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+          }
+          const base64 = btoa(binary);
+          AndroidPrint.saveCSV(filename, base64);
+          toast('CSV saved in Downloads/Pathpedi');
+          return;
+        } catch (e) {
+          console.error('Android CSV save failed:', e);
+          toast('Android save fail hua, browser download try kar rahe hain');
+        }
+      }
+
+      // Browser fallback
+      const blob = new Blob([csvWithBom], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = filename;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
     document.getElementById('exportDepositsBtn').addEventListener('click', () => {
