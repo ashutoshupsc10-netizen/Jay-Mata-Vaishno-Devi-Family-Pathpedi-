@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:allowBackup="true"
-        android:label="@string/app_name"
-        android:theme="@style/Theme.Pathpedi"
-        android:usesCleartextTraffic="true">
+    android:allowBackup="true"
+    android:icon="@drawable/ic_pathpedi_bank"
+    android:label="@string/app_name"
+    android:theme="@style/Theme.Pathpedi"
+    android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
