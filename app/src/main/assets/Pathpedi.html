@@ -2178,8 +2178,59 @@
       out.innerHTML=`<div id="voucherCard" style="background:#fff;border:1px solid #d0d5dd;border-radius:14px;padding:1.25rem;max-width:620px;margin:auto;"><div style="text-align:center;border-bottom:1px solid #ddd;padding-bottom:.75rem;margin-bottom:.75rem;"><h2 style="margin:.2rem 0;">Jay Mata Vaishno Devi Family Pathpedi</h2><div>Sahakari Pathpedhi Management System</div><h3 style="margin:.7rem 0 0;">${v.type} Receipt / Voucher</h3></div><div class="grid-2"><div><b>Reference</b><br>${escapeHtml(v.ref)}</div><div><b>Date</b><br>${fmtDate(v.date)}</div><div><b>Member</b><br>${escapeHtml(v.member)}</div><div><b>Member ID</b><br>${escapeHtml(v.memberId||'–')}</div><div><b>Amount</b><br><strong style="font-size:1.2rem;">${fmt(v.amount)}</strong></div><div><b>Entry Time</b><br>${v.entryTime?escapeHtml(new Date(v.entryTime).toLocaleString('en-IN')):'–'}</div></div><div style="margin-top:1rem;padding:.8rem;background:#f8fafc;border-radius:10px;"><b>Details:</b> ${escapeHtml(v.details)}</div><div style="margin-top:2rem;display:flex;justify-content:space-between;"><span>Prepared By: __________</span><span>Signature: __________</span></div></div>`;
     }
 
+    // ========== COMMON ANDROID PRINT SYSTEM ==========
+    function pathpediAndroidPrint(title, content) {
+      if (!content) {
+        toast('Print ke liye content available nahi hai');
+        return;
+      }
+
+      const safeTitle = escapeHtml(title || 'Pathpedi Print');
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${safeTitle}</title>
+<style>
+body{font-family:Arial,sans-serif;margin:20px;padding:0;color:#111;background:#fff}
+h1,h2,h3,h4{color:#111}
+table{width:100%;border-collapse:collapse;margin-top:12px}
+th,td{border:1px solid #555;padding:7px;text-align:left;vertical-align:top}
+th{font-weight:700;background:#f2f2f2}
+@media print{body{margin:10mm}table{page-break-inside:auto}tr{page-break-inside:avoid}}
+</style>
+</head>
+<body>
+<h2>Jay Mata Vaishno Devi Family Pathpedi</h2>
+${content}
+</body>
+</html>`;
+
+      if (window.AndroidPrint && AndroidPrint.printHtml) {
+        AndroidPrint.printHtml(html);
+        return;
+      }
+
+      const w = window.open('', '_blank');
+      if (!w) {
+        toast('Print window blocked');
+        return;
+      }
+      w.document.write(html);
+      w.document.close();
+      w.onload = function () {
+        w.print();
+      };
+    }
+
     function printVoucher(){
-      if(!currentVoucherRecord)return; const v=currentVoucherRecord; const html=document.getElementById('voucherCard')?.outerHTML||''; const w=window.open('','_blank'); if(!w){toast('Print window blocked. Browser popup allow karein.');return;} w.document.write(`<html><head><title>${v.type} ${v.ref}</title><style>body{font-family:Arial,sans-serif;padding:25px;color:#111}*{box-sizing:border-box}.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.grid-2>div{padding:8px;border-bottom:1px solid #eee}@media print{body{padding:0}}</style></head><body>${html}<script>window.onload=()=>window.print()<\/script></body></html>`); w.document.close(); auditLog('Voucher Printed',v.ref,'Receipt/voucher print requested',v.memberId,v.amount); saveData();
+      if(!currentVoucherRecord)return;
+      const v=currentVoucherRecord;
+      const html=document.getElementById('voucherCard')?.outerHTML||'';
+      pathpediAndroidPrint(v.type+' '+v.ref,html);
+      auditLog('Voucher Printed',v.ref,'Receipt/voucher print requested',v.memberId,v.amount);
+      saveData();
     }
 
     function populatePhase1Selectors(){
@@ -2213,7 +2264,13 @@
       rows.sort((a,b)=>String(a.date).localeCompare(String(b.date))); currentLoanLedgerRows=rows;
       out.innerHTML=`<div class="calc-box"><b>Loan ${escapeHtml(id)}</b> · ${escapeHtml(memberName(loan.memberId))}<br>Original Principal: ${fmt(loan.principal)} · Current Outstanding: ${fmt(loan.outstanding)} · FY ${escapeHtml(fy)}</div><div style="overflow:auto;margin-top:.75rem"><table><thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Amount</th><th>Outstanding</th><th>Details</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${escapeHtml(x.type)}</td><td>${escapeHtml(x.ref||'–')}</td><td>${fmt(x.amount)}</td><td>${x.outstanding===''?'–':fmt(x.outstanding)}</td><td>${escapeHtml(x.details||'')}</td></tr>`).join('')}</tbody></table></div>`;
     }
-    function printLedger(kind){ const id=kind==='member'?'ledgerMember':'ledgerLoan'; const out=kind==='member'?'memberLedgerOutput':'loanLedgerOutput'; if(!document.getElementById(out)?.innerHTML){kind==='member'?showMemberLedger():showLoanLedger();} const html=document.getElementById(out)?.innerHTML||''; if(!html){toast('Ledger select karein');return;} const w=window.open('','_blank'); if(!w){toast('Print window blocked');return;} w.document.write(`<html><head><title>${kind==='member'?'Member':'Loan'} Ledger</title><style>body{font-family:Arial;padding:20px;color:#111}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:7px;text-align:left}th{background:#f2f4f7}.calc-box{padding:12px;border:1px solid #ccc;margin-bottom:15px}</style></head><body><h2>Jay Mata Vaishno Devi Family Pathpedi</h2>${html}<script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();}
+    function printLedger(kind){
+      const out=kind==='member'?'memberLedgerOutput':'loanLedgerOutput';
+      if(!document.getElementById(out)?.innerHTML){kind==='member'?showMemberLedger():showLoanLedger();}
+      const html=document.getElementById(out)?.innerHTML||'';
+      if(!html){toast('Ledger select karein');return;}
+      pathpediAndroidPrint(kind==='member'?'Member Ledger':'Loan Ledger',html);
+    }
     function exportLedgerCSV(kind){ const rows=kind==='member'?currentMemberLedgerRows:currentLoanLedgerRows; if(!rows.length){kind==='member'?showMemberLedger():showLoanLedger();} const rr=kind==='member'?currentMemberLedgerRows:currentLoanLedgerRows; if(!rr.length){toast('Ledger mein records nahi hain');return;} const head=kind==='member'?['Date','Type','Reference','Amount','Details']:['Date','Type','Reference','Amount','Outstanding','Details']; downloadCSV(kind==='member'?'pathpedi_member_ledger.csv':'pathpedi_loan_ledger.csv',[head,...rr.map(x=>kind==='member'?[x.date,x.type,x.ref,x.amount,x.details]:[x.date,x.type,x.ref,x.amount,x.outstanding,x.details])]); toast('Ledger exported'); }
 
     function calculateMonthlyClosing(){
@@ -2839,7 +2896,9 @@ document.getElementById('saveMonthlyCloseBtn')?.addEventListener('click',saveMon
       document.getElementById('p4Members').textContent=members.length; document.getElementById('p4Deposits').textContent=fmt(dep); document.getElementById('p4Loans').textContent=fmt(issue); document.getElementById('p4Outstanding').textContent=fmt(outstanding); document.getElementById('p4Repayments').textContent=fmt(rep); document.getElementById('p4Interest').textContent=fmt(interest); document.getElementById('p4Fine').textContent=fmt(fine); document.getElementById('p4Profit').textContent=fmt(profit);
       const el=document.getElementById('p4DashboardDetails'); if(el)el.innerHTML=`<div class="row"><span>FY Loan Top-Up</span><strong>${fmt(top)}</strong></div><div class="row"><span>Total Actual Profit</span><strong>${fmt(profit)}</strong></div><div class="row"><span>Profit Distributed in FY</span><strong>${fmt(distributed)}</strong></div><div class="row total"><span>Undistributed from FY Profit</span><strong>${fmt(Math.max(0,profit-distributed))}</strong></div><div class="row"><span>Active Loan Count</span><strong>${(data.loans||[]).filter(x=>x.status==='active'&&Number(x.outstanding||0)>0).length}</strong></div>`;
     }
-    function p4PrintHtml(title,inner){const w=window.open('','_blank');if(!w){toast('Print window blocked');return;}w.document.write(`<html><head><title>${escapeHtml(title)}</title><style>body{font-family:Arial,sans-serif;padding:20px;color:#111}*{box-sizing:border-box}.grid-2,.grid-4{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.grid-4{grid-template-columns:repeat(4,1fr)}.stat-card,.calc-box{border:1px solid #ccc;border-radius:10px;padding:12px;margin-bottom:8px}.label{font-size:12px;color:#666}.value{font-size:20px;font-weight:700}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:7px;text-align:left}th{background:#f2f4f7}.card{border:1px solid #ddd;padding:12px;margin-top:12px;border-radius:10px}@media print{body{padding:0}.card{break-inside:avoid}}</style></head><body><h2>Jay Mata Vaishno Devi Family Pathpedi</h2>${inner}<script>window.onload=()=>window.print()<\\/script></body></html>`);w.document.close();}
+    function p4PrintHtml(title,inner){
+      pathpediAndroidPrint(title,inner);
+    }
     function p4XmlEscape(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');}
     function p4Cell(v){const n=Number(v);const type=(v!==''&&v!=null&&isFinite(n)&&String(v).trim()!==''&&String(v).trim()===String(n))?'Number':'String';return `<Cell><Data ss:Type="${type}">${p4XmlEscape(type==='Number'?n:v)}</Data></Cell>`;}
     function p4Sheet(name,headers,rows){return `<Worksheet ss:Name="${p4XmlEscape(name.slice(0,31))}"><Table>${headers.map(p4Cell).join('')?'<Row>'+headers.map(p4Cell).join('')+'</Row>':''}${rows.map(r=>'<Row>'+r.map(p4Cell).join('')+'</Row>').join('')}</Table></Worksheet>`;}
@@ -2941,10 +3000,12 @@ document.getElementById('saveMonthlyCloseBtn')?.addEventListener('click',saveMon
       const info=document.getElementById('p3ClosureInfo'); if(info) info.innerHTML='<b>Closed:</b> '+fmtDate(loan.closureDate||loan.date)+'<br><b>Outstanding:</b> '+fmt(loan.outstanding||0)+'<br><b>Closure Ref:</b> '+escapeHtml(loan.closureTransactionId||'–');
     }
     function printLoanCertificate(){
-      const loan=(data.loans||[]).find(l=>l.id===phase3CurrentCertificateLoanId); if(!loan)return;
-      const html=phase3LoanCertificateHtml(loan); const w=window.open('','_blank'); if(!w){toast('Print window blocked. Browser popup allow karein.');return;}
-      w.document.write(`<html><head><title>Loan Closure Certificate ${loan.id}</title><style>body{font-family:Arial,sans-serif;padding:25px;color:#111}*{box-sizing:border-box}.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.grid-2>div{padding:8px;border-bottom:1px solid #eee}@media print{body{padding:0}}</style></head><body>${html}<script>window.onload=()=>window.print()<\/script></body></html>`); w.document.close();
-      auditLog('Loan Closure Certificate Printed',loan.transactionId||loan.id,'Closure certificate print requested',loan.memberId,0); saveData();
+      const loan=(data.loans||[]).find(l=>l.id===phase3CurrentCertificateLoanId);
+      if(!loan)return;
+      const html=phase3LoanCertificateHtml(loan);
+      pathpediAndroidPrint('Loan Closure Certificate '+loan.id,html);
+      auditLog('Loan Closure Certificate Printed',loan.transactionId||loan.id,'Closure certificate print requested',loan.memberId,0);
+      saveData();
     }
     function renderPhase3(){
       const settings=phase3Settings(); const dayEl=document.getElementById('p3DueDay'); if(dayEl) dayEl.value=settings.interestDueDay;
@@ -3054,7 +3115,13 @@ document.getElementById('saveMonthlyCloseBtn')?.addEventListener('click',saveMon
     function p7Rows(){const m=p7Selected();if(!m)return[];let r=[];data.deposits.filter(x=>x.memberId===m.id).forEach(x=>r.push({date:x.date,type:'Deposit',ref:x.transactionId||'—',amount:Number(x.amount||0),details:`Monthly deposit${Number(x.lateFine||0)?' + Late Fine '+fmt(x.lateFine):''}`}));data.repayments.filter(x=>x.memberId===m.id).forEach(x=>r.push({date:x.date,type:'Loan Repayment',ref:x.transactionId||'—',amount:Number(x.amount||0),details:'Principal repayment'}));(data.interestAccruals||[]).filter(x=>x.memberId===m.id).forEach(x=>r.push({date:x.date,type:'Interest Paid',ref:x.transactionId||'—',amount:Number(x.amount||0),details:'Monthly loan interest'}));(data.profitDistributions||[]).filter(d=>d.status!=='reversed').forEach(d=>(d.memberCredits||[]).filter(c=>c.memberId===m.id).forEach(c=>r.push({date:d.date,type:'Profit Distribution',ref:d.transactionId||'—',amount:Number(c.amount||0),details:'Profit credited'})));return r.sort((a,b)=>String(a.date).localeCompare(String(b.date)));}
     function p7RenderPassbook(){const m=p7Selected(),el=document.getElementById('p7PassbookPreview');if(!m){el.innerHTML='<div class="empty">Select a member to view passbook.</div>';return;}const r=p7Rows();el.innerHTML=r.length?`<table><thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Amount</th><th>Details</th></tr></thead><tbody>${r.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${escapeHtml(x.type)}</td><td>${escapeHtml(x.ref)}</td><td>${fmt(x.amount)}</td><td>${escapeHtml(x.details)}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No financial entries yet.</div>';}
     document.getElementById('p7MemberSelect').addEventListener('change',p7Load);document.getElementById('p7SaveProfileBtn').addEventListener('click',p7Save);document.getElementById('p7Status').addEventListener('change',()=>{const m=p7Selected();if(m){m.status=document.getElementById('p7Status').value;saveData();renderMembers();}});document.getElementById('p7Photo').addEventListener('change',e=>{const f=e.target.files?.[0],m=p7Selected();if(!f||!m)return;if(f.size>1200000){toast('Photo 1.2 MB se chhoti rakhein');e.target.value='';return;}const rr=new FileReader();rr.onload=()=>{m.photo=rr.result;saveData();p7Load();};rr.readAsDataURL(f);});document.getElementById('p7ClearPhotoBtn').addEventListener('click',()=>{const m=p7Selected();if(!m)return;m.photo='';saveData();p7Load();});
-    document.getElementById('p7PassbookBtn').addEventListener('click',()=>{const m=p7Selected();if(!m){toast('Member select karein');return;}const html=document.getElementById('p7PassbookPreview').innerHTML;const w=window.open('','_blank');if(!w){toast('Print window blocked');return;}w.document.write(`<html><head><title>Member Passbook</title><style>body{font-family:Arial;padding:20px;color:#111}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:7px;text-align:left}th{background:#f2f4f7}</style></head><body><h2>Jay Mata Vaishno Devi Family Pathpedi</h2><p><strong>Member Passbook</strong><br>${escapeHtml(m.id)} · ${escapeHtml(m.name)}<br>${escapeHtml(m.mobile||'')} · ${escapeHtml(m.address||'')}</p>${html}<script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();});
+    document.getElementById('p7PassbookBtn').addEventListener('click',()=>{
+      const m=p7Selected();
+      if(!m){toast('Member select karein');return;}
+      const html=document.getElementById('p7PassbookPreview').innerHTML;
+      const header='<p><strong>Member Passbook</strong><br>'+escapeHtml(m.id)+' · '+escapeHtml(m.name)+'<br>'+escapeHtml(m.mobile||'')+' · '+escapeHtml(m.address||'')+'</p>';
+      pathpediAndroidPrint('Member Passbook',header+html);
+    });
     document.getElementById('p7ExportBtn').addEventListener('click',()=>{const m=p7Selected();if(!m){toast('Member select karein');return;}const r=p7Rows();downloadCSV(`member_${m.id}_passbook.csv`,[['Member ID','Member Name','Date','Type','Reference','Amount','Details'],...r.map(x=>[m.id,m.name,x.date,x.type,x.ref,x.amount,x.details])]);toast('Member CSV exported');});
     function refreshPhase7(){p7PopulateMembers();}
 
@@ -3102,77 +3169,10 @@ document.getElementById('saveMonthlyCloseBtn')?.addEventListener('click',saveMon
     function p6SaveTransfer(){const date=document.getElementById('p6TransferDate')?.value||today(),from=document.getElementById('p6TransferFrom')?.value,to=document.getElementById('p6TransferTo')?.value,amount=Number(document.getElementById('p6TransferAmount')?.value||0),note=(document.getElementById('p6TransferNote')?.value||'').trim();if(from===to){toast('From aur To alag hona chahiye');return;}if(amount<=0){toast('Valid amount enter karein');return;}if(!Array.isArray(data.phase6Transfers))data.phase6Transfers=[];const rec={id:'TR'+Date.now(),transactionId:transactionId('TRF'),date,from,to,amount,note,createdAt:new Date().toISOString(),status:'active'};data.phase6Transfers.unshift(rec);auditLog('Cash/Bank Transfer',rec.transactionId,`${from} → ${to}`,'',amount);saveData();document.getElementById('p6TransferAmount').value='';document.getElementById('p6TransferNote').value='';p6RenderDayBook();p6RenderTransfers();toast('Transfer recorded');}
     function p6RenderTransfers(){const el=document.getElementById('p6TransferHistory');if(!el)return;const a=(data.phase6Transfers||[]).slice(0,20);el.innerHTML=a.length?`<table><thead><tr><th>Date</th><th>Ref</th><th>From</th><th>To</th><th>Amount</th><th>Note</th></tr></thead><tbody>${a.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${escapeHtml(x.transactionId||x.id)}</td><td>${escapeHtml(x.from)}</td><td>${escapeHtml(x.to)}</td><td>${fmt(x.amount)}</td><td>${escapeHtml(x.note||'')}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No transfers recorded.</div>';}
     function p6PrintDayBook(){
-    const content = document.getElementById('p6DayBook')?.innerHTML || '';
-
-    if(!content){
-        toast('Pehle Day Book calculate karein');
-        return;
+      const content=document.getElementById('p6DayBook')?.innerHTML||'';
+      if(!content){toast('Pehle Day Book calculate karein');return;}
+      pathpediAndroidPrint('Daily Day Book',content);
     }
-
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pathpedi Day Book</title>
-<style>
-    body{
-        font-family: Arial, sans-serif;
-        margin: 20px;
-        color: #111;
-        background: #fff;
-    }
-
-    h1,h2,h3{
-        color: #111;
-    }
-
-    table{
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 12px;
-    }
-
-    th,td{
-        border: 1px solid #555;
-        padding: 7px;
-        text-align: left;
-    }
-
-    th{
-        font-weight: 700;
-        background: #f2f2f2;
-    }
-
-    @media print{
-        body{
-            margin: 10mm;
-        }
-    }
-</style>
-</head>
-<body>
-${content}
-</body>
-</html>`;
-
-    if(window.AndroidPrint && AndroidPrint.printHtml){
-        AndroidPrint.printHtml(html);
-        return;
-    }
-
-    // Browser fallback
-    const w = window.open('', '_blank');
-
-    if(!w){
-        toast('Print window blocked');
-        return;
-    }
-
-    w.document.write(html);
-    w.document.close();
-}
     function p6Init(){const d=document.getElementById('p6DayDate'),td=document.getElementById('p6TransferDate');if(d&&!d.value)d.value=today();if(td&&!td.value)td.value=today();document.getElementById('p6RefreshDayBookBtn')?.addEventListener('click',p6RenderDayBook);document.getElementById('p6SaveClosingBtn')?.addEventListener('click',p6SaveClosing);document.getElementById('p6TransferBtn')?.addEventListener('click',p6SaveTransfer);document.getElementById('p6PrintDayBookBtn')?.addEventListener('click',p6PrintDayBook);document.getElementById('p6OpeningCash')?.addEventListener('input',p6RenderDayBook);document.getElementById('p6OpeningBank')?.addEventListener('input',p6RenderDayBook);d?.addEventListener('change',p6RenderDayBook);p6RenderTransfers();p6RenderDayBook();}
 
     p6Init();
