@@ -69,15 +69,17 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl("file:///android_asset/Pathpedi.html")
 
         onBackPressedDispatcher.addCallback(
-            this,
-            object : OnBackPressedCallback(true) {
-                override fun handleOnBackPressed() {
-                    if (webView.canGoBack()) {
-                        webView.goBack()
-                    }
-                }
+    this,
+    object : OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() {
+            if (webView.canGoBack()) {
+                webView.goBack()
+            } else {
+                finish()
             }
-        )
+        }
+    }
+)
     }
 
     override fun onResume() {
