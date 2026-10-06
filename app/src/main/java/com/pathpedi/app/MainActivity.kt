@@ -152,66 +152,163 @@ class MainActivity : AppCompatActivity() {
          * Downloads/Pathpedi folder on Android 10+.
          */
         @JavascriptInterface
-        fun saveCSV(filename: String, base64Data: String) {
-            val activity = context as? MainActivity ?: return
+fun saveCSV(filename: String, base64Data: String): Boolean {
+
+    val activity = context as? MainActivity ?: return false
+
+    return try {
+
+        val safeName = filename
+            .replace("/", "_")
+            .replace("\\", "_")
+            .ifBlank { "pathpedi_export.csv" }
+
+        val bytes = Base64.decode(
+            base64Data,
+            Base64.DEFAULT
+        )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+
+            val values = ContentValues().apply {
+
+                put(
+                    MediaStore.Downloads.DISPLAY_NAME,
+                    safeName
+                )
+
+                put(
+                    MediaStore.Downloads.MIME_TYPE,
+                    "text/csv"
+                )
+
+                put(
+                    MediaStore.Downloads.RELATIVE_PATH,
+                    Environment.DIRECTORY_DOWNLOADS + "/Pathpedi/"
+                )
+
+                put(
+                    MediaStore.Downloads.IS_PENDING,
+                    1
+                )
+            }
+
+            val resolver = activity.contentResolver
+
+            val uri = resolver.insert(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                values
+            ) ?: throw Exception(
+                "MediaStore insert failed"
+            )
 
             try {
-                val safeName = filename
-                    .replace("/", "_")
-                    .replace("\\", "_")
-                    .ifBlank { "pathpedi_export.csv" }
 
-                val bytes = Base64.decode(base64Data, Base64.DEFAULT)
+                resolver.openOutputStream(uri)?.use { output ->
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    val values = ContentValues().apply {
-                        put(MediaStore.Downloads.DISPLAY_NAME, safeName)
-                        put(MediaStore.Downloads.MIME_TYPE, "text/csv")
-                        put(
-                            MediaStore.Downloads.RELATIVE_PATH,
-                            Environment.DIRECTORY_DOWNLOADS + "/Pathpedi"
-                        )
-                        put(MediaStore.Downloads.IS_PENDING, 1)
-                    }
+                    output.write(bytes)
+                    output.flush()
 
-                    val resolver = activity.contentResolver
-                    val uri = resolver.insert(
-                        MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                        values
-                    ) ?: throw Exception("Could not create CSV file")
+                } ?: throw Exception(
+                    "Could not open CSV output stream"
+                )
 
-                    try {
-                        resolver.openOutputStream(uri)?.use { output ->
-                            output.write(bytes)
-                            output.flush()
-                        } ?: throw Exception("Could not open CSV output stream")
+                val done = ContentValues().apply {
 
-                        val done = ContentValues().apply {
-                            put(MediaStore.Downloads.IS_PENDING, 0)
-                        }
-                        resolver.update(uri, done, null, null)
-                    } catch (e: Exception) {
-                        resolver.delete(uri, null, null)
-                        throw e
-                    }
-
-                    activity.runOnUiThread {
-                        // HTML already shows the user-facing toast.
-                    }
-                } else {
-                    // Older Android fallback. Android 10+ is the normal supported path.
-                    val downloads = Environment.getExternalStoragePublicDirectory(
-                        Environment.DIRECTORY_DOWNLOADS
+                    put(
+                        MediaStore.Downloads.IS_PENDING,
+                        0
                     )
-                    val folder = File(downloads, "Pathpedi")
-                    if (!folder.exists()) folder.mkdirs()
-                    val file = File(folder, safeName)
-                    FileOutputStream(file).use { it.write(bytes) }
                 }
+
+                resolver.update(
+                    uri,
+                    done,
+                    null,
+                    null
+                )
+
+                activity.runOnUiThread {
+
+                    android.widget.Toast.makeText(
+                        activity,
+                        "CSV saved: Downloads/Pathpedi/$safeName",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+
+                true
+
             } catch (e: Exception) {
-                e.printStackTrace()
+
+                resolver.delete(
+                    uri,
+                    null,
+                    null
+                )
+
+                throw e
             }
+
+        } else {
+
+            val downloads =
+                Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOWNLOADS
+                )
+
+            val folder = File(
+                downloads,
+                "Pathpedi"
+            )
+
+            if (
+                !folder.exists() &&
+                !folder.mkdirs()
+            ) {
+                throw Exception(
+                    "Could not create Downloads/Pathpedi"
+                )
+            }
+
+            val file = File(
+                folder,
+                safeName
+            )
+
+            FileOutputStream(file).use {
+                it.write(bytes)
+            }
+
+            activity.runOnUiThread {
+
+                android.widget.Toast.makeText(
+                    activity,
+                    "CSV saved: Downloads/Pathpedi/$safeName",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+
+            true
         }
+
+    } catch (e: Exception) {
+
+        e.printStackTrace()
+
+        activity.runOnUiThread {
+
+            android.widget.Toast.makeText(
+                activity,
+                "CSV save failed: " +
+                    (e.message ?: "Unknown error"),
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
+
+        false
+    }
+}
 
         private fun decodeJsString(value: String): String {
             if (
