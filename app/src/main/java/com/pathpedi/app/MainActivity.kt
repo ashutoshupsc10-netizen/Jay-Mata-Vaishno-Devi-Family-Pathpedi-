@@ -309,7 +309,164 @@ fun saveCSV(filename: String, base64Data: String): Boolean {
         false
     }
 }
+@JavascriptInterface
+fun saveBackup(filename: String, base64Data: String): Boolean {
 
+    val activity = context as? MainActivity ?: return false
+
+    return try {
+
+        val safeName = filename
+            .replace("/", "_")
+            .replace("\\", "_")
+            .ifBlank { "pathpedi_backup.json" }
+
+        val bytes = Base64.decode(
+            base64Data,
+            Base64.DEFAULT
+        )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+
+            val values = ContentValues().apply {
+
+                put(
+                    MediaStore.Downloads.DISPLAY_NAME,
+                    safeName
+                )
+
+                put(
+                    MediaStore.Downloads.MIME_TYPE,
+                    "application/json"
+                )
+
+                put(
+                    MediaStore.Downloads.RELATIVE_PATH,
+                    Environment.DIRECTORY_DOWNLOADS + "/Pathpedi/"
+                )
+
+                put(
+                    MediaStore.Downloads.IS_PENDING,
+                    1
+                )
+            }
+
+            val resolver = activity.contentResolver
+
+            val uri = resolver.insert(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                values
+            ) ?: throw Exception(
+                "Backup MediaStore insert failed"
+            )
+
+            try {
+
+                resolver.openOutputStream(uri)?.use { output ->
+
+                    output.write(bytes)
+                    output.flush()
+
+                } ?: throw Exception(
+                    "Could not open backup output stream"
+                )
+
+                val done = ContentValues().apply {
+
+                    put(
+                        MediaStore.Downloads.IS_PENDING,
+                        0
+                    )
+                }
+
+                resolver.update(
+                    uri,
+                    done,
+                    null,
+                    null
+                )
+
+                activity.runOnUiThread {
+
+                    android.widget.Toast.makeText(
+                        activity,
+                        "Backup saved: Downloads/Pathpedi/$safeName",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+
+                true
+
+            } catch (e: Exception) {
+
+                resolver.delete(
+                    uri,
+                    null,
+                    null
+                )
+
+                throw e
+            }
+
+        } else {
+
+            val downloads =
+                Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOWNLOADS
+                )
+
+            val folder = File(
+                downloads,
+                "Pathpedi"
+            )
+
+            if (
+                !folder.exists() &&
+                !folder.mkdirs()
+            ) {
+                throw Exception(
+                    "Could not create Downloads/Pathpedi"
+                )
+            }
+
+            val file = File(
+                folder,
+                safeName
+            )
+
+            FileOutputStream(file).use {
+                it.write(bytes)
+            }
+
+            activity.runOnUiThread {
+
+                android.widget.Toast.makeText(
+                    activity,
+                    "Backup saved: Downloads/Pathpedi/$safeName",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+
+            true
+        }
+
+    } catch (e: Exception) {
+
+        e.printStackTrace()
+
+        activity.runOnUiThread {
+
+            android.widget.Toast.makeText(
+                activity,
+                "Backup save failed: " +
+                    (e.message ?: "Unknown error"),
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
+
+        false
+    }
+}
         private fun decodeJsString(value: String): String {
             if (
                 value.length >= 2 &&
