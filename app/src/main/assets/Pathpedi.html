@@ -2406,21 +2406,73 @@ toast('Android CSV save failed');
     }
 
     function downloadFullBackup(showToastMsg=true){
-      const payload=createBackupPayload();
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'pathpedi_backup_' + today() + '.json';
-      a.click();
-      setTimeout(()=>URL.revokeObjectURL(url),500);
-      const now = new Date().toLocaleString('en-IN');
-      localStorage.setItem(LAST_BACKUP_KEY, now);
-      updateLastBackupInfo();
-      if(showToastMsg) toast('Full backup downloaded – file ko safe jagah save karein');
-      renderPhase5Safety();
-      return payload;
+  const payload = createBackupPayload();
+  const jsonText = JSON.stringify(payload, null, 2);
+  const filename = 'pathpedi_backup_' + today() + '.json';
+
+  // Android APK: save directly to Downloads/Pathpedi/
+  if(window.AndroidPrint && typeof AndroidPrint.saveBackup === 'function'){
+    try{
+      const bytes = new TextEncoder().encode(jsonText);
+      let binary = '';
+      const chunkSize = 0x8000;
+
+      for(let i = 0; i < bytes.length; i += chunkSize){
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+
+      const base64 = btoa(binary);
+      const saved = AndroidPrint.saveBackup(filename, base64);
+
+      if(saved){
+        const now = new Date().toLocaleString('en-IN');
+        localStorage.setItem(LAST_BACKUP_KEY, now);
+        updateLastBackupInfo();
+
+        if(showToastMsg){
+          toast('Full backup saved in Downloads/Pathpedi');
+        }
+
+        renderPhase5Safety();
+        return payload;
+      }
+
+      toast('Android backup save failed');
+
+    }catch(e){
+      console.error('Android backup save failed:', e);
+      toast('Android backup save fail hua, browser download try kar rahe hain');
     }
+  }
+
+  // Browser fallback
+  const blob = new Blob([jsonText], {
+    type: 'application/json'
+  });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+
+  a.href = url;
+  a.download = filename;
+
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+
+  const now = new Date().toLocaleString('en-IN');
+  localStorage.setItem(LAST_BACKUP_KEY, now);
+  updateLastBackupInfo();
+
+  if(showToastMsg){
+    toast('Full backup downloaded – file ko safe jagah save karein');
+  }
+
+  renderPhase5Safety();
+  return payload;
+}
 
     document.getElementById('exportBackupBtn').addEventListener('click', () => downloadFullBackup(true));
 
