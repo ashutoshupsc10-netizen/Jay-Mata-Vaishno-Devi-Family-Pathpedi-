@@ -2306,9 +2306,13 @@ ${content}
             binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
           }
           const base64 = btoa(binary);
-          AndroidPrint.saveCSV(filename, base64);
-          toast('CSV saved in Downloads/Pathpedi');
-          return;
+          const saved = AndroidPrint.saveCSV(filename, base64);
+
+if (saved) {
+    return;
+}
+
+toast('Android CSV save failed');
         } catch (e) {
           console.error('Android CSV save failed:', e);
           toast('Android save fail hua, browser download try kar rahe hain');
