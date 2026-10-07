@@ -2356,8 +2356,99 @@ window.pathpediConfirm = pathpediConfirm;
       pdCollected.textContent=fmt(col);pdDistributed.textContent=fmt(dist);pdAvailable.textContent=fmt(avail);pdEligible.textContent=good.length;pdPerMember.textContent=fmt(per);pdTotal.textContent=fmt(total);pdRemainder.textContent=fmt(rem);
       pdMessage.style.display='block';pdMessage.innerHTML=invalid?`⚠ Distribution date must be after ${fmtDate(end)} and cannot be future.`:dup?'⚠ This distribution is already recorded.':!good.length?'No active member has deposits in all 12 months.':!avail?'No collected interest is available.':`Preview: ${good.length} eligible members × ${fmt(per)} = ${fmt(total)}. Remaining ${fmt(rem)} stays undistributed.`;
       pdEligibilityEmpty.style.display=data.members.length?'none':'block';pdEligibilityTable.innerHTML=data.members.map(m=>{const e=eligibility(m.id,fy);return `<tr><td>${escapeHtml(m.name)}</td><td>${m.status==='inactive'?'<span class="badge badge-amber">Inactive</span>':e.ok?'<span class="badge badge-green">Eligible</span>':'<span class="badge badge-red">Not eligible</span>'}</td><td>${e.present}/12</td><td>${e.missing.length?e.missing.join(', '):'—'}</td><td>${e.ok?fmt(per):'₹0'}</td></tr>`}).join('');pdConfirmBtn.disabled=!good.length||!avail||invalid||dup;return{fy,date,good,col,dist,avail,per,total,rem,invalid,dup}; }
-    function confirmProfitDistribution(){const r=calculateProfitDistribution();if(r.invalid||r.dup||!r.good.length||!r.avail)return;if(!confirm(`Confirm distribution of ${fmt(r.total)} to ${r.good.length} eligible members?`))return;if(!Array.isArray(data.profitDistributions))data.profitDistributions=[];data.profitDistributions.unshift({transactionId:transactionId('PROF'),id:'PD'+Date.now(),financialYear:r.fy,date:r.date,totalProfit:r.total,profitPerMember:r.per,eligibleMembers:r.good.length,memberCredits:r.good.map(x=>({memberId:x.m.id,name:x.m.name,amount:r.per})),remainder:r.rem,status:'confirmed'});addActivity('Profit Distribution','Eligible Members',r.total,r.fy+' · '+r.date);saveData();renderProfitHistory();calculateProfitDistribution();toast('Profit distribution recorded');}
-    function reverseProfitDistribution(id){if(!askDeletePassword())return;const x=(data.profitDistributions||[]).find(d=>d.id===id);if(!x||x.status==='reversed')return;if(!confirm('Reverse this distribution?'))return;x.status='reversed';x.reversedAt=new Date().toISOString();saveData();renderProfitHistory();calculateProfitDistribution();toast('Distribution reversed');}
+   async function confirmProfitDistribution(){const r=calculateProfitDistribution();if(r.invalid||r.dup||!r.good.length||!r.avail)return;
+                                             const confirmProfit = await pathpediConfirm({
+  icon: '💰',
+  title: 'Confirm Profit Distribution',
+  message: 'Profit distribute karne se pehle details check karein.',
+  body: `
+    <div style="display:grid;gap:.55rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:.9rem;">
+
+      <div style="display:flex;justify-content:space-between;gap:1rem;">
+        <span style="color:#667085;">Financial Year</span>
+        <strong>${escapeHtml(r.fy)}</strong>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;gap:1rem;">
+        <span style="color:#667085;">Eligible Members</span>
+        <strong>${r.good.length}</strong>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;gap:1rem;">
+        <span style="color:#667085;">Available Profit</span>
+        <strong>${fmt(r.avail)}</strong>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;gap:1rem;">
+        <span style="color:#667085;">Profit / Member</span>
+        <strong>${fmt(r.per)}</strong>
+      </div>
+
+      <div style="border-top:1px solid #e2e8f0;padding-top:.65rem;display:flex;justify-content:space-between;gap:1rem;">
+        <span style="font-weight:700;">Total Distribution</span>
+        <strong style="font-size:1.08rem;">${fmt(r.total)}</strong>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;gap:1rem;">
+        <span style="color:#667085;">Remaining Undistributed</span>
+        <strong>${fmt(r.rem)}</strong>
+      </div>
+
+    </div>
+
+    <div style="margin-top:.75rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:.75rem;font-size:.82rem;color:#1e40af;">
+      ℹ️ Profit distribution actual collected profit ke basis par hai.
+    </div>
+  `,
+  okText: 'Distribute Profit',
+  danger: false
+});
+
+if(!confirmProfit) return; if(!Array.isArray(data.profitDistributions))data.profitDistributions=[];data.profitDistributions.unshift({transactionId:transactionId('PROF'),id:'PD'+Date.now(),financialYear:r.fy,date:r.date,totalProfit:r.total,profitPerMember:r.per,eligibleMembers:r.good.length,memberCredits:r.good.map(x=>({memberId:x.m.id,name:x.m.name,amount:r.per})),remainder:r.rem,status:'confirmed'});addActivity('Profit Distribution','Eligible Members',r.total,r.fy+' · '+r.date);saveData();renderProfitHistory();calculateProfitDistribution();toast('Profit distribution recorded');}
+  async function reverseProfitDistribution(id){if(!askDeletePassword())return;const x=(data.profitDistributions||[]).find(d=>d.id===id);if(!x||x.status==='reversed')return;
+                                             const confirmReverseProfit = await pathpediConfirm({
+  icon: '⚠️',
+  title: 'Reverse Profit Distribution',
+  message: 'Profit distribution reverse karne se pehle details check karein.',
+  body: `
+    <div style="display:grid;gap:.55rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:.9rem;">
+
+      <div style="display:flex;justify-content:space-between;gap:1rem;">
+        <span style="color:#667085;">Financial Year</span>
+        <strong>${escapeHtml(x.financialYear || '—')}</strong>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;gap:1rem;">
+        <span style="color:#667085;">Distribution Date</span>
+        <strong>${escapeHtml(x.date || '—')}</strong>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;gap:1rem;">
+        <span style="color:#667085;">Eligible Members</span>
+        <strong>${Number(x.eligibleMembers || 0)}</strong>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;gap:1rem;">
+        <span style="color:#667085;">Profit / Member</span>
+        <strong>${fmt(x.profitPerMember || 0)}</strong>
+      </div>
+
+      <div style="border-top:1px solid #e2e8f0;padding-top:.65rem;display:flex;justify-content:space-between;gap:1rem;">
+        <span style="font-weight:700;">Total Distribution</span>
+        <strong style="font-size:1.08rem;">${fmt(x.totalProfit || 0)}</strong>
+      </div>
+
+    </div>
+
+    <div style="margin-top:.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:.75rem;font-size:.82rem;color:#991b1b;">
+      ⚠️ Distribution reverse hogi. Original record delete nahi hoga; status Reversed ke roop mein history mein rahega.
+    </div>
+  `,
+  okText: 'Reverse Distribution',
+  danger: true
+});
+
+if(!confirmReverseProfit) return;  x.status='reversed';x.reversedAt=new Date().toISOString();saveData();renderProfitHistory();calculateProfitDistribution();toast('Distribution reversed');}
     function renderProfitHistory(){pdHistoryEmpty.style.display=(data.profitDistributions||[]).length?'none':'block';pdHistoryTable.innerHTML=(data.profitDistributions||[]).map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${x.financialYear}</td><td>${x.eligibleMembers}</td><td>${fmt(x.profitPerMember)}</td><td>${fmt(x.totalProfit)}</td><td>${x.status==='reversed'?'<span class="badge badge-red">Reversed</span>':'<span class="badge badge-green">Confirmed</span>'}</td><td>${x.status==='reversed'?'':`<button class="btn btn-danger btn-sm" onclick="reverseProfitDistribution('${x.id}')">Reverse</button>`}</td></tr>`).join('');}
     
 
