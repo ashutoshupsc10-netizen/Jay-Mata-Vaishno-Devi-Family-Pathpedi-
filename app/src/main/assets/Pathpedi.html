@@ -1304,8 +1304,119 @@
   </footer>
 
   <div class="toast" id="toast"></div>
+<!-- ========== PATHPEDI STYLISH CONFIRM MODAL ========== -->
+<div class="pp-modal-backdrop" id="ppConfirmModal" role="dialog" aria-modal="true" aria-labelledby="ppConfirmTitle">
+  <div class="pp-modal" id="ppConfirmCard">
 
+    <div class="pp-modal-head">
+      <div class="pp-modal-icon" id="ppConfirmIcon">❓</div>
+
+      <div>
+        <div class="pp-modal-title" id="ppConfirmTitle">
+          Confirm Action
+        </div>
+
+        <div class="pp-modal-message" id="ppConfirmMessage"></div>
+      </div>
+    </div>
+
+    <div class="pp-modal-body" id="ppConfirmBody"></div>
+
+    <div class="pp-modal-actions">
+      <button
+        type="button"
+        class="btn pp-modal-cancel"
+        id="ppConfirmCancel">
+        Cancel
+      </button>
+
+      <button
+        type="button"
+        class="btn btn-primary pp-modal-ok"
+        id="ppConfirmOk">
+        Confirm
+      </button>
+    </div>
+
+  </div>
+</div>
+<!-- ========== END PATHPEDI CONFIRM MODAL ========== -->
   <script>
+    // ========== PATHPEDI COMMON STYLISH CONFIRMATION ==========
+
+function pathpediConfirm(options = {}) {
+  return new Promise(resolve => {
+
+    const modal = document.getElementById('ppConfirmModal');
+    const card = document.getElementById('ppConfirmCard');
+    const icon = document.getElementById('ppConfirmIcon');
+    const title = document.getElementById('ppConfirmTitle');
+    const msg = document.getElementById('ppConfirmMessage');
+    const body = document.getElementById('ppConfirmBody');
+    const ok = document.getElementById('ppConfirmOk');
+    const cancel = document.getElementById('ppConfirmCancel');
+
+    if (!modal || !card || !icon || !title || !msg || !body || !ok || !cancel) {
+      resolve(window.confirm(options.message || ''));
+      return;
+    }
+
+    icon.textContent = options.icon || '❓';
+    title.textContent = options.title || 'Confirm Action';
+    msg.textContent = options.message || '';
+    body.innerHTML = options.body || '';
+
+    card.classList.toggle('danger', !!options.danger);
+
+    ok.textContent = options.okText || 'Confirm';
+    ok.className =
+      'btn pp-modal-ok ' +
+      (options.danger ? 'btn-danger' : 'btn-primary');
+
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+
+    let done = false;
+
+    const finish = value => {
+      if (done) return;
+
+      done = true;
+
+      modal.classList.remove('show');
+      document.body.style.overflow = '';
+
+      document.removeEventListener('keydown', keyHandler);
+
+      resolve(value);
+    };
+
+    const keyHandler = e => {
+      if (e.key === 'Escape') {
+        finish(false);
+      }
+    };
+
+    ok.onclick = () => finish(true);
+    cancel.onclick = () => finish(false);
+
+    modal.onclick = e => {
+      if (e.target === modal) {
+        finish(false);
+      }
+    };
+
+    document.addEventListener('keydown', keyHandler);
+
+    setTimeout(() => {
+      ok.focus();
+    }, 30);
+  });
+}
+
+window.pathpediConfirm = pathpediConfirm;
+
+// ========== END PATHPEDI COMMON STYLISH CONFIRMATION ==========
     // ========== ENTRY TIME ==========
     function currentTimeLocal() {
       const d = new Date();
