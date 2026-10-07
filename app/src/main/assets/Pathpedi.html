@@ -1346,7 +1346,6 @@
 
 function pathpediConfirm(options = {}) {
   return new Promise(resolve => {
-
     const modal = document.getElementById('ppConfirmModal');
     const card = document.getElementById('ppConfirmCard');
     const icon = document.getElementById('ppConfirmIcon');
@@ -1367,12 +1366,11 @@ function pathpediConfirm(options = {}) {
     body.innerHTML = options.body || '';
 
     card.classList.toggle('danger', !!options.danger);
-
     ok.textContent = options.okText || 'Confirm';
-    ok.className =
-      'btn pp-modal-ok ' +
-      (options.danger ? 'btn-danger' : 'btn-primary');
+    ok.className = 'btn pp-modal-ok ' + (options.danger ? 'btn-danger' : 'btn-primary');
 
+    const hideCancel = !!options.hideCancel;
+    cancel.style.display = hideCancel ? 'none' : '';
     modal.classList.add('show');
     document.body.style.overflow = 'hidden';
 
@@ -1380,41 +1378,106 @@ function pathpediConfirm(options = {}) {
 
     const finish = value => {
       if (done) return;
-
       done = true;
-
       modal.classList.remove('show');
       document.body.style.overflow = '';
-
+      cancel.style.display = '';
       document.removeEventListener('keydown', keyHandler);
-
       resolve(value);
     };
 
     const keyHandler = e => {
-      if (e.key === 'Escape') {
-        finish(false);
-      }
+      if (e.key === 'Escape' && !hideCancel) finish(false);
     };
 
     ok.onclick = () => finish(true);
     cancel.onclick = () => finish(false);
-
     modal.onclick = e => {
-      if (e.target === modal) {
-        finish(false);
-      }
+      if (e.target === modal && !hideCancel) finish(false);
     };
 
     document.addEventListener('keydown', keyHandler);
+    setTimeout(() => ok.focus(), 30);
+  });
+}
 
-    setTimeout(() => {
-      ok.focus();
-    }, 30);
+async function pathpediAlert(options = {}) {
+  await pathpediConfirm({
+    ...options,
+    hideCancel: true,
+    okText: options.okText || 'OK'
+  });
+}
+
+function pathpediPrompt(options = {}) {
+  return new Promise(resolve => {
+    const modal = document.getElementById('ppConfirmModal');
+    const card = document.getElementById('ppConfirmCard');
+    const icon = document.getElementById('ppConfirmIcon');
+    const title = document.getElementById('ppConfirmTitle');
+    const msg = document.getElementById('ppConfirmMessage');
+    const body = document.getElementById('ppConfirmBody');
+    const ok = document.getElementById('ppConfirmOk');
+    const cancel = document.getElementById('ppConfirmCancel');
+
+    if (!modal || !card || !icon || !title || !msg || !body || !ok || !cancel) {
+      resolve(window.prompt(options.message || '', options.defaultValue || ''));
+      return;
+    }
+
+    icon.textContent = options.icon || '🔐';
+    title.textContent = options.title || 'Enter Details';
+    msg.textContent = options.message || '';
+    body.innerHTML = `
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:.9rem;">
+        <input id="ppPromptInput"
+          type="${options.inputType || 'text'}"
+          inputmode="${options.inputMode || ''}"
+          autocomplete="${options.autocomplete || 'off'}"
+          placeholder="${escapeHtml(options.placeholder || '')}"
+          value="${escapeHtml(options.defaultValue || '')}"
+          style="font-size:1rem;padding:.75rem .85rem;">
+      </div>`;
+    card.classList.toggle('danger', !!options.danger);
+    ok.textContent = options.okText || 'Continue';
+    ok.className = 'btn pp-modal-ok ' + (options.danger ? 'btn-danger' : 'btn-primary');
+    cancel.style.display = '';
+
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+
+    let done = false;
+    const input = document.getElementById('ppPromptInput');
+
+    const finish = value => {
+      if (done) return;
+      done = true;
+      modal.classList.remove('show');
+      document.body.style.overflow = '';
+      cancel.style.display = '';
+      document.removeEventListener('keydown', keyHandler);
+      resolve(value);
+    };
+
+    const keyHandler = e => {
+      if (e.key === 'Escape') finish(null);
+      if (e.key === 'Enter' && document.activeElement === input) finish(input?.value ?? '');
+    };
+
+    ok.onclick = () => finish(input?.value ?? '');
+    cancel.onclick = () => finish(null);
+    modal.onclick = e => {
+      if (e.target === modal) finish(null);
+    };
+
+    document.addEventListener('keydown', keyHandler);
+    setTimeout(() => { input?.focus(); input?.select(); }, 30);
   });
 }
 
 window.pathpediConfirm = pathpediConfirm;
+window.pathpediAlert = pathpediAlert;
+window.pathpediPrompt = pathpediPrompt;
 
 // ========== END PATHPEDI COMMON STYLISH CONFIRMATION ==========
     // ========== ENTRY TIME ==========
@@ -1668,21 +1731,44 @@ window.pathpediConfirm = pathpediConfirm;
     // Password protection for all delete actions
     const DELETE_PASSWORD = 'vaishno';
 
-    function askDeletePassword() {
-      const pwd = prompt('⚠️ Admin PIN daalein:');
+    async function askDeletePassword() {
+      const pwd = await pathpediPrompt({
+        icon: '🔐',
+        title: 'Admin PIN Required',
+        message: 'Sensitive action continue karne ke liye Admin PIN enter karein.',
+        placeholder: 'Enter Admin PIN',
+        inputType: 'password',
+        inputMode: 'numeric',
+        autocomplete: 'current-password',
+        okText: 'Verify PIN'
+      });
       if (pwd === null) return false;
       const expected = data.adminPin || DELETE_PASSWORD;
       if (pwd === expected) return true;
-      toast('Galat Admin PIN! Action cancel ho gaya.');
+      await pathpediAlert({
+        icon: '❌',
+        title: 'Incorrect Admin PIN',
+        message: 'Galat Admin PIN hai. Action cancel ho gaya.',
+        danger: true
+      });
       return false;
     }
 
 
     // Block new/backdated entries in a locked financial year.
-    document.addEventListener('submit', function(e) {
-      const f=e.target; const dateEl=f.querySelector('[id$=\"Date\"], input[type=\"date\"]');
+    document.addEventListener('submit', async function(e) {
+      const f=e.target; const dateEl=f.querySelector('[id$="Date"], input[type="date"]');
       const date=dateEl?.value;
-      if(date && isFYLockedForDate(date)) { e.preventDefault(); e.stopImmediatePropagation(); alert('Financial Year '+fyForDate(date)+' is LOCKED. New/backdated entry allowed nahi hai.'); }
+      if(date && isFYLockedForDate(date)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        await pathpediAlert({
+          icon: '🔒',
+          title: 'Financial Year Locked',
+          message: 'Financial Year ' + fyForDate(date) + ' is LOCKED. New/backdated entry allowed nahi hai.',
+          danger: true
+        });
+      }
     }, true);
 
     // ========== INTEREST CALCULATIONS ==========
@@ -1797,14 +1883,6 @@ window.pathpediConfirm = pathpediConfirm;
     }
 
     function escapeHtml(v){ return String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-    function deleteMember(id) {
-      if (!askDeletePassword()) return;
-      if (!confirm('Delete this member? Deposits and loans linked to them will remain but show as Unknown.')) return;
-      data.members = data.members.filter(m => m.id !== id);
-      saveData();
-      toast('Member deleted');
-    }
 
     // ========== DEPOSIT LATE FINE ==========
     function calculateDepositLateFine(amount, paymentDate) {
@@ -1948,7 +2026,7 @@ window.pathpediConfirm = pathpediConfirm;
     });
 
     async function reverseRecord(arrName, id, label) {
-      if (!askDeletePassword()) return;
+      if (!(await askDeletePassword())) return;
       const arr=data[arrName]||[]; const rec=arr.find(x=>x.id===id);
       if(!rec) return; if(rec.status==='reversed'||rec.status==='cancelled'){toast('Record already reversed/cancelled');return;}
       const recMember = rec.memberId ? memberName(rec.memberId) : '–';
@@ -1997,7 +2075,7 @@ if (!confirmReverse) return;
       saveData(); toast(label+' reversed — original record retained');
     }
    async function deleteMember(id) {
-      if (!askDeletePassword()) return;
+      if (!(await askDeletePassword())) return;
       const m=data.members.find(x=>x.id===id); if(!m)return;
       const member = data.members.find(m => m.id === id);
 if (!member) return;
@@ -2035,7 +2113,7 @@ if (!confirmMember) return;
     function deleteDeposit(id) { reverseRecord('deposits',id,'Deposit'); }
     function deleteLoan(id) { reverseRecord('loans',id,'Loan'); }
    async function deleteRepayment(id) {
-  if (!askDeletePassword()) return;
+  if (!(await askDeletePassword())) return;
 
   const rep = data.repayments.find(r => r.id === id);
   if (!rep) return;
@@ -2133,7 +2211,7 @@ if (!confirmMember) return;
   toast('Repayment reversed — principal restored');
 }
     async function deleteInterestAccrual(id) {
-  if (!askDeletePassword()) return;
+  if (!(await askDeletePassword())) return;
 
   const acc = (data.interestAccruals || []).find(a => a.id === id);
   if (!acc) return;
@@ -2652,7 +2730,7 @@ if (!confirmMember) return;
 });
 
 if(!confirmProfit) return; if(!Array.isArray(data.profitDistributions))data.profitDistributions=[];data.profitDistributions.unshift({transactionId:transactionId('PROF'),id:'PD'+Date.now(),financialYear:r.fy,date:r.date,totalProfit:r.total,profitPerMember:r.per,eligibleMembers:r.good.length,memberCredits:r.good.map(x=>({memberId:x.m.id,name:x.m.name,amount:r.per})),remainder:r.rem,status:'confirmed'});addActivity('Profit Distribution','Eligible Members',r.total,r.fy+' · '+r.date);saveData();renderProfitHistory();calculateProfitDistribution();toast('Profit distribution recorded');}
-  async function reverseProfitDistribution(id){if(!askDeletePassword())return;const x=(data.profitDistributions||[]).find(d=>d.id===id);if(!x||x.status==='reversed')return;
+  async function reverseProfitDistribution(id){if(!(await askDeletePassword()))return;const x=(data.profitDistributions||[]).find(d=>d.id===id);if(!x||x.status==='reversed')return;
                                              const confirmReverseProfit = await pathpediConfirm({
   icon: '⚠️',
   title: 'Reverse Profit Distribution',
@@ -2702,7 +2780,7 @@ if(!confirmReverseProfit) return;  x.status='reversed';x.reversedAt=new Date().t
     // ========== TOP-UP AUDIT HISTORY ==========
 
     async function reverseTopUp(id) {
-  if (!askDeletePassword()) return;
+  if (!(await askDeletePassword())) return;
 
   const x = (data.loanTopUps || []).find(t => t.id === id);
   if (!x) {
@@ -2851,7 +2929,11 @@ if(!confirmReverseProfit) return;  x.status='reversed';x.reversedAt=new Date().t
         .sort((a,b) => String(a.date).localeCompare(String(b.date)));
 
       if (!rows.length) {
-        alert(`Top-Up Audit History — ${loanId}\n\nNo Top-Up recorded.`);
+        pathpediAlert({
+          icon: '📜',
+          title: 'Top-Up Audit History',
+          message: `Loan ${loanId} ke liye abhi koi Top-Up record nahi hai.`
+        });
         return;
       }
 
@@ -2861,7 +2943,12 @@ if(!confirmReverseProfit) return;  x.status='reversed';x.reversedAt=new Date().t
         (t.note ? `\n   Note: ${t.note}` : '')
       ).join('\n\n');
 
-      alert(`Top-Up Audit History — ${loanId}\nMember: ${loan.memberName || ''}\n\n${lines}`);
+      pathpediAlert({
+        icon: '📜',
+        title: `Top-Up Audit History — ${loanId}`,
+        message: `Member: ${loan.memberName || ''}`,
+        body: `<div style="white-space:pre-line;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:.9rem;max-height:45vh;overflow:auto;">${escapeHtml(lines)}</div>`
+      });
     }
 
     function getTopUpCount(loanId) {
@@ -3037,7 +3124,7 @@ if(!confirmReverseProfit) return;  x.status='reversed';x.reversedAt=new Date().t
     function renderCashClosingHistory(){ const out=document.getElementById('cashClosingHistory'); if(!out)return; const rows=(data.cashClosings||[]).slice(0,20); out.innerHTML=rows.length?`<div style="overflow:auto"><table><thead><tr><th>Date</th><th>Opening Cash</th><th>Closing Cash</th><th>Opening Bank</th><th>Closing Bank</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${fmt(x.openingCash)}</td><td>${fmt(x.cashClosing)}</td><td>${fmt(x.openingBank)}</td><td>${fmt(x.bankClosing)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No daily closing saved yet.</div>'; }
     function renderProfitReconciliation(){ const box=document.getElementById('profitReconciliationBox'); if(!box)return; const interest=(data.interestAccruals||[]).filter(x=>x.status!=='reversed').reduce((s,x)=>s+Number(x.amount||0),0); const fine=(data.deposits||[]).filter(x=>x.status!=='reversed').reduce((s,x)=>s+Number(x.lateFine||0),0); const distributed=(data.profitDistributions||[]).filter(x=>x.status!=='reversed').reduce((s,x)=>s+Number(x.totalProfit||0),0); const profit=interest+fine; box.innerHTML=`<div class="row"><span>Actual Interest Collected</span><strong>${fmt(interest)}</strong></div><div class="row"><span>Late Fine Collected</span><strong>${fmt(fine)}</strong></div><div class="row total"><span>Total Actual Profit</span><strong>${fmt(profit)}</strong></div><div class="row"><span>Profit Already Distributed</span><strong>${fmt(distributed)}</strong></div><div class="row total"><span>Undistributed Profit</span><strong>${fmt(Math.max(0,profit-distributed))}</strong></div>`; }
     function renderAdminPinStatus(){ const el=document.getElementById('adminPinStatus'); if(el)el.textContent='Admin PIN is set. Sensitive actions are protected.'; }
-    function saveAdminPin(){ const a=document.getElementById('newAdminPin')?.value||'',b=document.getElementById('confirmAdminPin')?.value||''; if(a.length<4){toast('PIN minimum 4 characters hona chahiye');return;} if(a!==b){toast('PIN match nahi hai');return;} if(!askDeletePassword())return; data.adminPin=a; auditLog('Admin PIN Changed','','Admin PIN updated'); saveData(); document.getElementById('newAdminPin').value='';document.getElementById('confirmAdminPin').value='';renderAdminPinStatus();toast('Admin PIN updated'); }
+    async function saveAdminPin(){ const a=document.getElementById('newAdminPin')?.value||'',b=document.getElementById('confirmAdminPin')?.value||''; if(a.length<4){toast('PIN minimum 4 characters hona chahiye');return;} if(a!==b){toast('PIN match nahi hai');return;} if(!(await askDeletePassword()))return; data.adminPin=a; auditLog('Admin PIN Changed','','Admin PIN updated'); saveData(); document.getElementById('newAdminPin').value='';document.getElementById('confirmAdminPin').value='';renderAdminPinStatus();toast('Admin PIN updated'); }
 
 
     // ========== PHASE 1: RECEIPTS / LEDGERS / MONTHLY CLOSING ==========
@@ -3490,7 +3577,7 @@ toast('Android CSV save failed');
       const file = e.target.files && e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = function(ev) {
+      reader.onload = async function(ev) {
         try {
           const parsed = JSON.parse(ev.target.result);
           if (!parsed || typeof parsed !== 'object') throw new Error('Invalid file');
@@ -3498,15 +3585,28 @@ toast('Android CSV save failed');
           if (!Array.isArray(parsed.members) && !Array.isArray(parsed.loans) && !Array.isArray(parsed.deposits)) {
             throw new Error('Yeh Pathpedi backup file nahi lagti');
           }
-          if (!confirm('Restore karne se CURRENT data replace ho jaayega.\n\nMembers: ' + (parsed.members || []).length +
-            '\nDeposits: ' + (parsed.deposits || []).length +
-            '\nLoans: ' + (parsed.loans || []).length +
-            '\nRepayments: ' + (parsed.repayments || []).length +
-            '\n\nContinue?')) {
+          const restoreOk = await pathpediConfirm({
+            icon: '♻️',
+            title: 'Restore Backup',
+            message: 'CURRENT data replace ho jaayega. Restore se pehle backup details check karein.',
+            body: `
+              <div style="display:grid;gap:.55rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:.9rem;">
+                <div style="display:flex;justify-content:space-between;gap:1rem;"><span>Members</span><strong>${(parsed.members || []).length}</strong></div>
+                <div style="display:flex;justify-content:space-between;gap:1rem;"><span>Deposits</span><strong>${(parsed.deposits || []).length}</strong></div>
+                <div style="display:flex;justify-content:space-between;gap:1rem;"><span>Loans</span><strong>${(parsed.loans || []).length}</strong></div>
+                <div style="display:flex;justify-content:space-between;gap:1rem;"><span>Repayments</span><strong>${(parsed.repayments || []).length}</strong></div>
+              </div>
+              <div style="margin-top:.75rem;background:#fff1f2;border:1px solid #fecdd3;border-radius:12px;padding:.75rem;font-size:.82rem;color:#9f1239;">
+                ⚠️ Current Pathpedi data replace ho jayega. Restore ke baad ye action audit ke liye important hai.
+              </div>`,
+            okText: 'Continue Restore',
+            danger: true
+          });
+          if (!restoreOk) {
             e.target.value = '';
             return;
           }
-          if (!askDeletePassword()) {
+          if (!(await askDeletePassword())) {
             e.target.value = '';
             return;
           }
@@ -3530,10 +3630,31 @@ toast('Android CSV save failed');
       reader.readAsText(file);
     });
 
-    document.getElementById('clearAllBtn').addEventListener('click', () => {
-      if (!askDeletePassword()) return;
-      if (!confirm('This will permanently delete ALL members, deposits, loans and repayments. Are you sure?')) return;
-      if (!confirm('Final confirmation – clear everything?')) return;
+    document.getElementById('clearAllBtn').addEventListener('click', async () => {
+      if (!(await askDeletePassword())) return;
+      const first = await pathpediConfirm({
+        icon: '🗑️',
+        title: 'Clear All Pathpedi Data',
+        message: 'Ye action ALL accounting data ko reset karega.',
+        body: `<div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:14px;padding:.9rem;color:#991b1b;">
+          <strong>Members, deposits, loans, repayments aur related data clear ho jayega.</strong><br>
+          Is action ke baad current local data recover karna possible nahi hoga jab tak backup available na ho.
+        </div>`,
+        okText: 'Yes, Continue',
+        danger: true
+      });
+      if (!first) return;
+      const finalOk = await pathpediConfirm({
+        icon: '⚠️',
+        title: 'Final Confirmation',
+        message: 'Kya aap sach mein Pathpedi ka poora current data clear karna chahte hain?',
+        body: `<div style="text-align:center;background:#fef2f2;border:1px solid #fecaca;border-radius:14px;padding:1rem;font-weight:700;color:#991b1b;">
+          ALL DATA WILL BE RESET
+        </div>`,
+        okText: 'Clear Everything',
+        danger: true
+      });
+      if (!finalOk) return;
       data = defaultData();
       saveData();
       toast('All data cleared');
@@ -3896,8 +4017,8 @@ toast('Android CSV save failed');
     document.getElementById('showLoanStatementBtn')?.addEventListener('click',showAuditLoanStatement);
     document.getElementById('exportAuditBtn')?.addEventListener('click',exportAuditCSV);
     document.getElementById('auditFY')?.addEventListener('change',renderFYLocks);
-    document.getElementById('lockFYBtn')?.addEventListener('click',()=>{const fy=document.getElementById('auditFY').value;if(!fy)return;if(!confirm('FY '+fy+' ko LOCK karna hai? Is FY mein new/backdated entries block ho jayengi.'))return;data.financialYearLocks[fy]={lockedAt:new Date().toISOString()};auditLog('Financial Year Locked',fy,'Accounting period closed');saveData();toast('FY '+fy+' locked');});
-    document.getElementById('unlockFYBtn')?.addEventListener('click',()=>{const fy=document.getElementById('auditFY').value;if(!data.financialYearLocks?.[fy]){toast('FY already open');return;}if(!askDeletePassword())return;if(!confirm('FY '+fy+' ko unlock karna hai?'))return;delete data.financialYearLocks[fy];auditLog('Financial Year Unlocked',fy,'Accounting period reopened');saveData();toast('FY '+fy+' unlocked');});
+    document.getElementById('lockFYBtn')?.addEventListener('click',async()=>{const fy=document.getElementById('auditFY').value;if(!fy)return;const ok=await pathpediConfirm({icon:'🔒',title:'Lock Financial Year',message:'FY '+fy+' ko LOCK karna hai?',body:'<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:.9rem;">Is FY mein new/backdated accounting entries block ho jayengi. Galti sudharne ke liye Reverse/Cancel approach use karein.</div>',okText:'Lock FY',danger:true});if(!ok)return;data.financialYearLocks[fy]={lockedAt:new Date().toISOString()};auditLog('Financial Year Locked',fy,'Accounting period closed');saveData();toast('FY '+fy+' locked');});
+    document.getElementById('unlockFYBtn')?.addEventListener('click',async()=>{const fy=document.getElementById('auditFY').value;if(!data.financialYearLocks?.[fy]){toast('FY already open');return;}if(!(await askDeletePassword()))return;const ok=await pathpediConfirm({icon:'🔓',title:'Unlock Financial Year',message:'FY '+fy+' ko UNLOCK karna hai?',body:'<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:.9rem;">Unlock ke baad is FY mein entries dobara allow ho jayengi. Sirf authorized correction ke liye use karein.</div>',okText:'Unlock FY'});if(!ok)return;delete data.financialYearLocks[fy];auditLog('Financial Year Unlocked',fy,'Accounting period reopened');saveData();toast('FY '+fy+' unlocked');});
     document.getElementById('globalSearchBtn')?.addEventListener('click',runGlobalSearch);
     document.getElementById('globalSearchInput')?.addEventListener('keydown',e=>{if(e.key==='Enter')runGlobalSearch();});
     document.getElementById('calculateCashClosingBtn')?.addEventListener('click',calculateCashClosing);
@@ -4302,11 +4423,59 @@ document.getElementById('saveMonthlyCloseBtn')?.addEventListener('click',saveMon
     }
     async function p10EncryptedRestore(file){
       const pw=document.getElementById('p10BackupPassword').value;if(pw.length<6){toast('Backup password enter karein');return;}
-      try{const obj=JSON.parse(await file.text());if(obj.format!=='PATHPEDI-ENCRYPTED-BACKUP')throw Error('format');const key=await p10Key(pw,p10Buf(obj.salt));const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:p10Buf(obj.iv)},key,p10Buf(obj.ciphertext));const payload=JSON.parse(new TextDecoder().decode(plain));if(!payload.data)throw Error('data');if(!confirm('Encrypted backup restore karne se current data replace hoga. Continue?'))return;data={...defaultData(),...payload.data};saveData();toast('Encrypted backup restored');}catch(e){toast('Restore failed: wrong password or invalid backup');}
+      try{
+        const obj=JSON.parse(await file.text());
+        if(obj.format!=='PATHPEDI-ENCRYPTED-BACKUP')throw Error('format');
+        const key=await p10Key(pw,p10Buf(obj.salt));
+        const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:p10Buf(obj.iv)},key,p10Buf(obj.ciphertext));
+        const payload=JSON.parse(new TextDecoder().decode(plain));
+        if(!payload.data)throw Error('data');
+        const ok=await pathpediConfirm({
+          icon:'🔐',
+          title:'Restore Encrypted Backup',
+          message:'Encrypted backup restore karne se current data replace hoga.',
+          body:'<div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:14px;padding:.9rem;color:#991b1b;">⚠️ Current data replace ho jayega. Restore continue karne se pehle ensure karein ki ye correct backup hai.</div>',
+          okText:'Restore Backup',
+          danger:true
+        });
+        if(!ok)return;
+        data={...defaultData(),...payload.data};
+        saveData();
+        toast('Encrypted backup restored');
+      }catch(e){toast('Restore failed: wrong password or invalid backup');}
     }
     function p10Snapshot(){const st=p10Settings();const raw=JSON.stringify(data);st.snapshots.unshift({timestamp:new Date().toLocaleString('en-IN'),size:raw.length,data:JSON.parse(raw)});st.snapshots=st.snapshots.slice(0,5);saveData();p10Render();toast('Local snapshot created');}
-    function p10RestoreSnapshot(i){const st=p10Settings(),snap=st.snapshots[i];if(!snap||!confirm('Selected snapshot restore karein? Current data replace hoga.'))return;data={...defaultData(),...snap.data};saveData();toast('Snapshot restored');}
-    function p10ClearSnapshots(){const st=p10Settings();if(confirm('All local snapshots clear karein?')){st.snapshots=[];saveData();p10Render();toast('Snapshots cleared');}}
+    async function p10RestoreSnapshot(i){
+      const st=p10Settings(),snap=st.snapshots[i];
+      if(!snap)return;
+      const ok=await pathpediConfirm({
+        icon:'♻️',
+        title:'Restore Local Snapshot',
+        message:'Selected snapshot restore karein? Current data replace hoga.',
+        body:`<div style="display:grid;gap:.55rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:.9rem;">
+          <div style="display:flex;justify-content:space-between;gap:1rem;"><span>Snapshot Time</span><strong>${escapeHtml(snap.timestamp || '—')}</strong></div>
+          <div style="display:flex;justify-content:space-between;gap:1rem;"><span>Snapshot Size</span><strong>${fmt(snap.size || 0)}</strong></div>
+        </div>`,
+        okText:'Restore Snapshot',
+        danger:true
+      });
+      if(!ok)return;
+      data={...defaultData(),...snap.data};saveData();toast('Snapshot restored');
+    }
+    async function p10ClearSnapshots(){
+      const st=p10Settings();
+      if(!st.snapshots?.length){toast('No local snapshots available');return;}
+      const ok=await pathpediConfirm({
+        icon:'🗑️',
+        title:'Clear Local Snapshots',
+        message:'All local snapshots clear karein?',
+        body:`<div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:14px;padding:.9rem;color:#991b1b;"><strong>${st.snapshots.length} snapshot(s)</strong> permanently remove ho jayenge.</div>`,
+        okText:'Clear Snapshots',
+        danger:true
+      });
+      if(!ok)return;
+      st.snapshots=[];saveData();p10Render();toast('Snapshots cleared');
+    }
     function downloadText(name,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
     document.getElementById('p10SaveLockBtn')?.addEventListener('click',p10SaveLock);
     document.getElementById('p10LockNowBtn')?.addEventListener('click',p10LockNow);
