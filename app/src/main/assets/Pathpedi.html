@@ -2004,7 +2004,7 @@ window.pathpediConfirm = pathpediConfirm;
     });
     document.getElementById('calcLoanBtn').addEventListener('click', updateLoanCalc);
 
-    document.getElementById('loanForm').addEventListener('submit', e => {
+    document.getElementById('loanForm').addEventListener('submit', async e => {
       e.preventDefault();
       const memberId = document.getElementById('lMember').value;
       const principal = Number(document.getElementById('lPrincipal').value);
@@ -2016,6 +2016,55 @@ window.pathpediConfirm = pathpediConfirm;
       const calc = calculateLoan(principal, rate, tenure, type);
       const loanId = 'L' + String(data.nextLoanId).padStart(4, '0');
       const monthlyInterest = Math.round(principal * (rate / 12 / 100));
+        const loanMember = memberName(memberId);
+
+  const confirmLoan = await pathpediConfirm({
+    icon: '💰',
+    title: 'Confirm New Loan',
+    message: 'Loan issue karne se pehle details check karein.',
+    body: `
+      <div style="display:grid;gap:.55rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:.9rem;">
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Loan ID</span>
+          <strong>${escapeHtml(loanId)}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Member</span>
+          <strong>${escapeHtml(loanMember)}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Principal</span>
+          <strong>${fmt(principal)}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Interest Rate</span>
+          <strong>${rate}% p.a.</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Monthly Interest</span>
+          <strong>${fmt(monthlyInterest)}</strong>
+        </div>
+
+        <div style="border-top:1px solid #e2e8f0;padding-top:.6rem;display:flex;justify-content:space-between;gap:1rem;">
+          <span style="font-weight:700;">Initial Outstanding</span>
+          <strong style="font-size:1.05rem;">${fmt(principal)}</strong>
+        </div>
+
+      </div>
+
+      <div style="margin-top:.75rem;font-size:.82rem;color:#667085;">
+        ℹ️ Monthly interest principal outstanding mein add nahi hoga.
+      </div>
+    `,
+    okText: 'Confirm Loan'
+  });
+
+  if (!confirmLoan) return;
       const loan = {
         transactionId: transactionId('LON'),
         id: loanId,
@@ -2082,7 +2131,7 @@ window.pathpediConfirm = pathpediConfirm;
     document.getElementById('iLoan').addEventListener('change', updateInterestInfo);
     document.getElementById('calcInterestBtn').addEventListener('click', updateInterestInfo);
 
-    document.getElementById('interestForm').addEventListener('submit', e => {
+    document.getElementById('interestForm').addEventListener('submit', async e => {
       e.preventDefault();
       const loanId = document.getElementById('iLoan').value;
       const amount = Number(document.getElementById('iAmount').value);
@@ -2097,7 +2146,52 @@ window.pathpediConfirm = pathpediConfirm;
       const month = document.getElementById('iMonth').value;
       const note = document.getElementById('iNote').value.trim() ||
         (month ? 'Monthly interest for ' + monthLabel(month) : 'Monthly interest');
+  const interestMember = memberName(loan.memberId);
+  const principalOutstanding = Number(loan.outstanding || 0);
 
+  const confirmInterest = await pathpediConfirm({
+    icon: '💰',
+    title: 'Confirm Interest Payment',
+    message: 'Interest payment save karne se pehle details check karein.',
+    body: `
+      <div style="display:grid;gap:.55rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:.9rem;">
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Loan ID</span>
+          <strong>${escapeHtml(loanId)}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Member</span>
+          <strong>${escapeHtml(interestMember)}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Month</span>
+          <strong>${escapeHtml(month || '-')}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Interest Paid</span>
+          <strong>${fmt(amount)}</strong>
+        </div>
+
+        <div style="border-top:1px solid #e2e8f0;padding-top:.6rem;display:flex;justify-content:space-between;gap:1rem;">
+          <span style="font-weight:700;">Principal Outstanding</span>
+          <strong style="font-size:1.05rem;">${fmt(principalOutstanding)}</strong>
+        </div>
+
+      </div>
+
+      <div style="margin-top:.75rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:.75rem;font-size:.82rem;color:#1e40af;">
+        ℹ️ Interest principal outstanding mein add nahi hoga.
+        Collected interest Pathpedi profit ke roop mein count hoga.
+      </div>
+    `,
+    okText: 'Confirm Interest'
+  });
+
+  if (!confirmInterest) return;
       // Members pay only interest – do NOT add to outstanding principal.
       // Just record as interest collected (Pathpedi profit).
       loan.interestCollected = (loan.interestCollected || 0) + amount;
@@ -2148,7 +2242,7 @@ window.pathpediConfirm = pathpediConfirm;
       document.getElementById('rAmount').value = loan.outstanding || '';
     });
 
-    document.getElementById('repayForm').addEventListener('submit', e => {
+    document.getElementById('repayForm').addEventListener('submit', async e => {
       e.preventDefault();
       const loanId = document.getElementById('rLoan').value;
       const amount = Number(document.getElementById('rAmount').value);
@@ -2163,7 +2257,53 @@ window.pathpediConfirm = pathpediConfirm;
         toast('Repayment cannot exceed outstanding principal of ' + fmt(loan.outstanding));
         return;
       }
+  const repaymentMember = memberName(loan.memberId);
+  const currentOutstanding = Number(loan.outstanding || 0);
+  const outstandingAfter = Math.max(0, currentOutstanding - amount);
 
+  const confirmRepayment = await pathpediConfirm({
+    icon: '💳',
+    title: 'Confirm Principal Repayment',
+    message: 'Repayment save karne se pehle details check karein.',
+    body: `
+      <div style="display:grid;gap:.55rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:.9rem;">
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Loan ID</span>
+          <strong>${escapeHtml(loanId)}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Member</span>
+          <strong>${escapeHtml(repaymentMember)}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Repayment Amount</span>
+          <strong>${fmt(amount)}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Current Outstanding</span>
+          <strong>${fmt(currentOutstanding)}</strong>
+        </div>
+
+        <div style="border-top:1px solid #e2e8f0;padding-top:.6rem;display:flex;justify-content:space-between;gap:1rem;">
+          <span style="font-weight:700;">Outstanding After Repayment</span>
+          <strong style="font-size:1.05rem;">${fmt(outstandingAfter)}</strong>
+        </div>
+
+      </div>
+
+      <div style="margin-top:.75rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:.75rem;font-size:.82rem;color:#1e40af;">
+        ℹ️ Repayment sirf principal outstanding ko reduce karega.
+        Interest alag se record hota hai.
+      </div>
+    `,
+    okText: 'Confirm Repayment'
+  });
+
+  if (!confirmRepayment) return;
       // REPAYMENT = only Principal reduction.
       // Interest alag se "Record Monthly Interest Payment" se record hota hai.
       const interestPart = 0;
