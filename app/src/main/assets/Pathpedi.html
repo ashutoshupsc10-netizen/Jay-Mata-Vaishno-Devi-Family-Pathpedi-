@@ -1852,7 +1852,52 @@ window.pathpediConfirm = pathpediConfirm;
 
   if (!proceed) return;
 }
+  const memberSelect = document.getElementById('dMember');
+  const memberText =
+    memberSelect?.selectedOptions?.[0]?.textContent?.trim() || memberId;
 
+  const totalReceived = amount + lateFine;
+
+  const saveDeposit = await pathpediConfirm({
+    icon: '💰',
+    title: 'Confirm Deposit',
+    message: 'Deposit save karne se pehle details check karein.',
+    body: `
+      <div style="display:grid;gap:.55rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:.9rem;">
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Member</span>
+          <strong>${escapeHtml(memberText)}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Month</span>
+          <strong>${escapeHtml(month)}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Deposit</span>
+          <strong>${fmt(amount)}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Late Fine</span>
+          <strong>${fmt(lateFine)}</strong>
+        </div>
+
+        <div style="border-top:1px solid #e2e8f0;padding-top:.6rem;display:flex;justify-content:space-between;gap:1rem;">
+          <span style="font-weight:700;">Total Received</span>
+          <strong style="font-size:1.05rem;">${fmt(totalReceived)}</strong>
+        </div>
+      </div>
+
+      <div style="margin-top:.75rem;font-size:.82rem;color:#667085;">
+        ℹ️ Late Fine alag se Pathpedi profit mein count hoga; deposit principal mein add nahi hoga.
+      </div>
+    `,
+    okText: 'Confirm Deposit'
+  });
+
+  if (!saveDeposit) return;
       const dep = {
         transactionId: transactionId('DEP'),
         id: 'D' + Date.now(),
