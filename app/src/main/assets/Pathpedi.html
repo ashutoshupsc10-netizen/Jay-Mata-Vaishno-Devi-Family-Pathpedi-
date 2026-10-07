@@ -2460,7 +2460,7 @@ window.pathpediConfirm = pathpediConfirm;
       document.getElementById('topUpPreviewNew').textContent = fmt(current + amount);
     }
 
-    function confirmTopUp() {
+    async function confirmTopUp() {
       const loanId = document.getElementById('topUpLoanId').value;
       const loan = data.loans.find(l => l.id === loanId);
       if (!loan) { toast('Loan not found'); return; }
@@ -2476,8 +2476,50 @@ window.pathpediConfirm = pathpediConfirm;
       const current = Number(loan.outstanding || 0);
       const newOutstanding = current + amount;
 
-      if (!confirm(`Confirm Loan Top-Up?\n\nCurrent Outstanding: ${fmt(current)}\nTop-Up Amount: ${fmt(amount)}\nNew Principal Outstanding: ${fmt(newOutstanding)}`)) return;
+            const topUpMember = memberName(loan.memberId);
 
+      const confirmTopUpResult = await pathpediConfirm({
+        icon: '➕',
+        title: 'Confirm Loan Top-Up',
+        message: 'Loan Top-Up save karne se pehle details check karein.',
+        body: `
+          <div style="display:grid;gap:.55rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:.9rem;">
+
+            <div style="display:flex;justify-content:space-between;gap:1rem;">
+              <span style="color:#667085;">Loan ID</span>
+              <strong>${escapeHtml(loan.id)}</strong>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;gap:1rem;">
+              <span style="color:#667085;">Member</span>
+              <strong>${escapeHtml(topUpMember)}</strong>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;gap:1rem;">
+              <span style="color:#667085;">Current Outstanding</span>
+              <strong>${fmt(current)}</strong>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;gap:1rem;">
+              <span style="color:#667085;">Top-Up Amount</span>
+              <strong>${fmt(amount)}</strong>
+            </div>
+
+            <div style="border-top:1px solid #e2e8f0;padding-top:.6rem;display:flex;justify-content:space-between;gap:1rem;">
+              <span style="font-weight:700;">New Principal Outstanding</span>
+              <strong style="font-size:1.05rem;">${fmt(newOutstanding)}</strong>
+            </div>
+
+          </div>
+
+          <div style="margin-top:.75rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:.75rem;font-size:.82rem;color:#1e40af;">
+            ℹ️ Same Loan ID rahega. Top-Up separate transaction aur audit record ke roop mein save hoga.
+          </div>
+        `,
+        okText: 'Confirm Top-Up'
+      });
+
+      if (!confirmTopUpResult) return;
       if (!Array.isArray(data.loanTopUps)) data.loanTopUps = [];
       loan.outstanding = newOutstanding;
 
