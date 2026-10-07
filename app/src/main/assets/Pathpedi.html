@@ -1947,35 +1947,282 @@ window.pathpediConfirm = pathpediConfirm;
         : 'Deposit saved');
     });
 
-    function reverseRecord(arrName, id, label) {
+    async function reverseRecord(arrName, id, label) {
       if (!askDeletePassword()) return;
       const arr=data[arrName]||[]; const rec=arr.find(x=>x.id===id);
       if(!rec) return; if(rec.status==='reversed'||rec.status==='cancelled'){toast('Record already reversed/cancelled');return;}
-      if(!confirm(`${label} ${id} ko Reverse/Cancel karna hai? Original record audit mein rahega.`)) return;
+      const recMember = rec.memberId ? memberName(rec.memberId) : '–';
+const recAmount = Number(rec.amount || rec.principal || 0);
+
+const confirmReverse = await pathpediConfirm({
+  icon: '↩️',
+  title: `${label} Reverse / Cancel`,
+  message: 'Transaction reverse karne se pehle details check karein.',
+  body: `
+    <div style="display:grid;gap:.55rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:.9rem;">
+
+      <div style="display:flex;justify-content:space-between;gap:1rem;">
+        <span style="color:#667085;">Reference</span>
+        <strong>${escapeHtml(rec.transactionId || rec.id || id)}</strong>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;gap:1rem;">
+        <span style="color:#667085;">Type</span>
+        <strong>${escapeHtml(label)}</strong>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;gap:1rem;">
+        <span style="color:#667085;">Member</span>
+        <strong>${escapeHtml(recMember)}</strong>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;gap:1rem;">
+        <span style="color:#667085;">Amount</span>
+        <strong>${fmt(recAmount)}</strong>
+      </div>
+
+    </div>
+
+    <div style="margin-top:.75rem;background:#fff1f2;border:1px solid #fecdd3;border-radius:12px;padding:.75rem;font-size:.82rem;color:#9f1239;">
+      ⚠️ Original record delete nahi hoga. Sirf status <strong>Reversed</strong> hoga aur audit history mein record rahega.
+    </div>
+  `,
+  okText: 'Reverse Transaction',
+  danger: true
+});
+
+if (!confirmReverse) return;
       rec.status='reversed'; rec.reversedAt=new Date().toISOString();
       auditLog(label+' Reversed', rec.transactionId||id, 'Original record retained; status set to reversed', rec.memberId, rec.amount);
       saveData(); toast(label+' reversed — original record retained');
     }
-    function deleteMember(id) {
+   async function deleteMember(id) {
       if (!askDeletePassword()) return;
       const m=data.members.find(x=>x.id===id); if(!m)return;
-      if(!confirm('Member ko delete nahi kiya jayega. Inactive mark karna hai?'))return;
+      const member = data.members.find(m => m.id === id);
+if (!member) return;
+
+const confirmMember = await pathpediConfirm({
+  icon: '👤',
+  title: 'Deactivate Member',
+  message: 'Member ko inactive karne se pehle details check karein.',
+  body: `
+    <div style="display:grid;gap:.55rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:.9rem;">
+
+      <div style="display:flex;justify-content:space-between;gap:1rem;">
+        <span style="color:#667085;">Member ID</span>
+        <strong>${escapeHtml(member.id)}</strong>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;gap:1rem;">
+        <span style="color:#667085;">Member Name</span>
+        <strong>${escapeHtml(member.name || '–')}</strong>
+      </div>
+
+    </div>
+
+    <div style="margin-top:.75rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:.75rem;font-size:.82rem;color:#9a3412;">
+      ⚠️ Member permanently delete nahi hoga. Member ko <strong>Inactive</strong> mark kiya jayega aur audit history mein record retained rahega.
+    </div>
+  `,
+  okText: 'Mark Inactive',
+  danger: true
+});
+
+if (!confirmMember) return;
       m.status='inactive'; auditLog('Member Inactivated',m.transactionId||id,'Member retained for audit',id,0); saveData(); toast('Member inactive kiya gaya');
     }
     function deleteDeposit(id) { reverseRecord('deposits',id,'Deposit'); }
     function deleteLoan(id) { reverseRecord('loans',id,'Loan'); }
-    function deleteRepayment(id) {
-      if (!askDeletePassword()) return; const rep=data.repayments.find(r=>r.id===id); if(!rep)return;
-      if(!confirm('Repayment ko Reverse karna hai? Original record audit mein rahega.'))return;
-      const loan=data.loans.find(l=>l.id===rep.loanId); if(loan && !rep.reversalApplied){const pp=rep.principalPart!=null?rep.principalPart:rep.amount; loan.outstanding=Number(loan.outstanding||0)+pp; loan.paid=Math.max(0,Number(loan.paid||0)-Number(rep.amount||0)); if(loan.status==='closed'&&loan.outstanding>0){loan.status='active';delete loan.closureDate;delete loan.closureEntryDateTime;delete loan.closureTransactionId;} rep.reversalApplied=true;}
-      rep.status='reversed'; rep.reversedAt=new Date().toISOString(); auditLog('Repayment Reversed',rep.transactionId||rep.id,'Principal restored to loan',rep.memberId,rep.amount); saveData(); toast('Repayment reversed');
+   async function deleteRepayment(id) {
+  if (!askDeletePassword()) return;
+
+  const rep = data.repayments.find(r => r.id === id);
+  if (!rep) return;
+
+  if (rep.status === 'reversed' || rep.status === 'cancelled') {
+    toast('Repayment already reversed/cancelled');
+    return;
+  }
+
+  const loan = data.loans.find(l => l.id === rep.loanId);
+  const repaymentMember = rep.memberId ? memberName(rep.memberId) : '-';
+  const principalPart = Number(rep.principalPart ?? rep.amount ?? 0);
+  const currentOutstanding = Number(loan?.outstanding ?? 0);
+  const outstandingAfterReverse = currentOutstanding + principalPart;
+
+  const confirmRepayment = await pathpediConfirm({
+    icon: '↩️',
+    title: 'Reverse Repayment',
+    message: 'Repayment reverse karne se pehle details check karein.',
+    body: `
+      <div style="display:grid;gap:.55rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:.9rem;">
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Transaction ID</span>
+          <strong>${escapeHtml(rep.transactionId || rep.id || '-')}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Loan ID</span>
+          <strong>${escapeHtml(rep.loanId || '-')}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Member</span>
+          <strong>${escapeHtml(repaymentMember)}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Repayment Amount</span>
+          <strong>${fmt(rep.amount || 0)}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Principal Reversed</span>
+          <strong>${fmt(principalPart)}</strong>
+        </div>
+
+        <div style="border-top:1px solid #e2e8f0;padding-top:.6rem;display:flex;justify-content:space-between;gap:1rem;">
+          <span style="font-weight:700;">Outstanding After Reverse</span>
+          <strong style="font-size:1.05rem;">${fmt(outstandingAfterReverse)}</strong>
+        </div>
+
+      </div>
+
+      <div style="margin-top:.75rem;background:#fff1f2;border:1px solid #fecdd3;border-radius:12px;padding:.75rem;font-size:.82rem;color:#9f1239;">
+        ⚠️ Repayment reverse hone par principal amount loan outstanding mein wapas add hoga.
+        Original repayment record delete nahi hoga; uska status <strong>Reversed</strong> hoga aur audit history mein record rahega.
+      </div>
+    `,
+    okText: 'Reverse Repayment',
+    danger: true
+  });
+
+  if (!confirmRepayment) return;
+
+  // Reverse repayment effect only once
+  if (loan && !rep.reversalApplied) {
+    loan.outstanding = Number(loan.outstanding || 0) + principalPart;
+    loan.paid = Math.max(0, Number(loan.paid || 0) - principalPart);
+
+    if (loan.status === 'closed') {
+      loan.status = 'active';
+      loan.closureDate = '';
+      loan.closureEntryDateTime = '';
+      loan.closureTransactionId = '';
     }
-    function deleteInterestAccrual(id) {
-      if (!askDeletePassword()) return; const acc=(data.interestAccruals||[]).find(a=>a.id===id); if(!acc)return;
-      if(!confirm('Interest payment ko Reverse karna hai? Original record audit mein rahega.'))return;
-      const loan=data.loans.find(l=>l.id===acc.loanId); if(loan&&!acc.reversalApplied){loan.interestCollected=Math.max(0,Number(loan.interestCollected||0)-Number(acc.amount||0));acc.reversalApplied=true;}
-      acc.status='reversed'; acc.reversedAt=new Date().toISOString(); auditLog('Interest Reversed',acc.transactionId||acc.id,'Actual collected interest reversed',acc.memberId,acc.amount); saveData(); toast('Interest payment reversed');
-    }
+
+    rep.reversalApplied = true;
+  }
+
+  rep.status = 'reversed';
+  rep.reversedAt = new Date().toISOString();
+
+  auditLog(
+    'Repayment Reversed',
+    rep.transactionId || rep.id,
+    'Repayment reversed; principal restored to loan outstanding',
+    rep.memberId,
+    rep.amount
+  );
+
+  saveData();
+  refreshUI();
+
+  toast('Repayment reversed — principal restored');
+}
+    async function deleteInterestAccrual(id) {
+  if (!askDeletePassword()) return;
+
+  const acc = (data.interestAccruals || []).find(a => a.id === id);
+  if (!acc) return;
+
+  if (acc.status === 'reversed' || acc.status === 'cancelled') {
+    toast('Interest payment already reversed/cancelled');
+    return;
+  }
+
+  const loan = data.loans.find(l => l.id === acc.loanId);
+
+  const interestMember = acc.memberId
+    ? memberName(acc.memberId)
+    : (loan ? memberName(loan.memberId) : '-');
+
+  const interestAmount = Number(acc.amount || 0);
+  const principalOutstanding = Number(loan?.outstanding || 0);
+
+  const confirmInterestReverse = await pathpediConfirm({
+    icon: '💰',
+    title: 'Reverse Interest Payment',
+    message: 'Interest payment reverse karne se pehle details check karein.',
+    body: `
+      <div style="display:grid;gap:.55rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:.9rem;">
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Transaction ID</span>
+          <strong>${escapeHtml(acc.transactionId || acc.id || '-')}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Loan ID</span>
+          <strong>${escapeHtml(acc.loanId || '-')}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Member</span>
+          <strong>${escapeHtml(interestMember)}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Interest Paid</span>
+          <strong>${fmt(interestAmount)}</strong>
+        </div>
+
+        <div style="border-top:1px solid #e2e8f0;padding-top:.6rem;display:flex;justify-content:space-between;gap:1rem;">
+          <span style="font-weight:700;">Principal Outstanding</span>
+          <strong style="font-size:1.05rem;">${fmt(principalOutstanding)}</strong>
+        </div>
+
+      </div>
+
+      <div style="margin-top:.75rem;background:#fff1f2;border:1px solid #fecdd3;border-radius:12px;padding:.75rem;font-size:.82rem;color:#9f1239;">
+        ⚠️ Interest reverse hone par interest collection/profit amount reverse hoga.
+        <strong>Principal outstanding mein interest add nahi hoga.</strong>
+        Original interest record delete nahi hoga; status <strong>Reversed</strong> rahega aur audit history mein record रहेगा.
+      </div>
+    `,
+    okText: 'Reverse Interest',
+    danger: true
+  });
+
+  if (!confirmInterestReverse) return;
+
+  if (loan && !acc.reversalApplied) {
+    loan.interestCollected = Math.max(
+      0,
+      Number(loan.interestCollected || 0) - interestAmount
+    );
+
+    acc.reversalApplied = true;
+  }
+
+  acc.status = 'reversed';
+  acc.reversedAt = new Date().toISOString();
+
+  auditLog(
+    'Interest Reversed',
+    acc.transactionId || acc.id,
+    'Interest payment reversed; principal unchanged',
+    acc.memberId,
+    acc.amount
+  );
+
+  saveData();
+  refreshUI();
+
+  toast('Interest payment reversed — principal unchanged');
+}
 
     // ========== LOANS ==========
     function updateLoanCalc() {
