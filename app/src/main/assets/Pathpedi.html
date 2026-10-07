@@ -272,6 +272,121 @@
       font-size: 0.8rem;
       color: var(--muted);
     }
+    /* ========== PATHPEDI STYLISH CONFIRM MODAL ========== */
+.pp-modal-backdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(15,23,42,.48);
+  backdrop-filter:blur(3px);
+  z-index:100000;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:1rem;
+}
+
+.pp-modal-backdrop.show{
+  display:flex;
+  animation:ppFadeIn .16s ease-out;
+}
+
+.pp-modal{
+  width:min(460px,100%);
+  background:#fff;
+  border-radius:20px;
+  box-shadow:0 24px 70px rgba(15,23,42,.28);
+  overflow:hidden;
+  border:1px solid #e5e7eb;
+  transform:translateY(8px);
+  animation:ppSlideIn .18s ease-out forwards;
+}
+
+.pp-modal-head{
+  display:flex;
+  align-items:flex-start;
+  gap:.8rem;
+  padding:1.15rem 1.2rem .75rem;
+}
+
+.pp-modal-icon{
+  width:44px;
+  height:44px;
+  border-radius:13px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:1.35rem;
+  background:#eff6ff;
+  flex:0 0 44px;
+}
+
+.pp-modal.danger .pp-modal-icon{
+  background:#fef2f2;
+}
+
+.pp-modal-title{
+  font-size:1.08rem;
+  font-weight:800;
+  color:#172033;
+  margin:.05rem 0 .25rem;
+}
+
+.pp-modal-message{
+  font-size:.9rem;
+  line-height:1.55;
+  color:#667085;
+  white-space:pre-line;
+}
+
+.pp-modal-body{
+  padding:0 1.2rem 1rem;
+}
+
+.pp-modal-actions{
+  display:flex;
+  gap:.65rem;
+  justify-content:flex-end;
+  padding:.85rem 1.2rem 1.15rem;
+  background:#f8fafc;
+  border-top:1px solid #eef2f7;
+}
+
+.pp-modal-actions button{
+  min-width:112px;
+}
+
+.pp-modal-cancel{
+  background:#fff!important;
+  color:#344054!important;
+  border:1px solid #d0d5dd!important;
+}
+
+.pp-modal-ok{
+  border:0!important;
+}
+
+@keyframes ppFadeIn{
+  from{opacity:0}
+  to{opacity:1}
+}
+
+@keyframes ppSlideIn{
+  to{transform:translateY(0)}
+}
+
+@media(max-width:480px){
+  .pp-modal-actions{
+    flex-direction:column-reverse;
+  }
+
+  .pp-modal-actions button{
+    width:100%;
+  }
+
+  .pp-modal{
+    border-radius:17px;
+  }
+}
   </style>
 </head>
 <body>
