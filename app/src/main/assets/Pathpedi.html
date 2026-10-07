@@ -1821,7 +1821,7 @@ window.pathpediConfirm = pathpediConfirm;
     }
 
     // ========== DEPOSITS ==========
-    document.getElementById('depositForm').addEventListener('submit', e => {
+    document.getElementById('depositForm').addEventListener('submit', async e => {
       e.preventDefault();
       const memberId = document.getElementById('dMember').value;
       const amount = Number(document.getElementById('dAmount').value);
@@ -1836,7 +1836,22 @@ window.pathpediConfirm = pathpediConfirm;
 
       // Prevent duplicate for same member+month (optional soft check)
       const exists = data.deposits.some(d => d.memberId === memberId && d.month === month);
-      if (exists && !confirm('A deposit for this member & month already exists. Add another?')) return;
+      if (exists) {
+  const proceed = await pathpediConfirm({
+    icon: '⚠️',
+    title: 'Duplicate Deposit',
+    message: 'Is member aur month ka deposit already recorded hai.',
+    body: `
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:.85rem;color:#9a3412;">
+        <strong>Warning:</strong> Agar aap Continue karte hain to same member aur same month ke liye ek aur deposit record create hoga.
+      </div>
+    `,
+    okText: 'Add Anyway',
+    danger: true
+  });
+
+  if (!proceed) return;
+}
 
       const dep = {
         transactionId: transactionId('DEP'),
