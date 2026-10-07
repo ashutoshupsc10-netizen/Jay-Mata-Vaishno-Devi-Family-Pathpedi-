@@ -3188,7 +3188,103 @@ ${content}
       const dep=(data.deposits||[]).filter(x=>x.status!=='reversed'&&(x.month===month||String(x.date||'').startsWith(month))); const reps=(data.repayments||[]).filter(x=>x.status!=='reversed'&&String(x.date||'').startsWith(month)); const ints=(data.interestAccruals||[]).filter(x=>x.status!=='reversed'&&String(x.date||'').startsWith(month)); const tops=(data.loanTopUps||[]).filter(x=>x.status!=='reversed'&&String(x.date||'').startsWith(month)); const loans=(data.loans||[]).filter(x=>x.status!=='reversed'&&String(x.date||'').startsWith(month)); const fines=dep.reduce((s,x)=>s+Number(x.lateFine||0),0); const deposit=dep.reduce((s,x)=>s+Number(x.amount||0),0), repayment=reps.reduce((s,x)=>s+Number(x.amount||0),0), interest=ints.reduce((s,x)=>s+Number(x.amount||0),0), topup=tops.reduce((s,x)=>s+Number(x.amount||0),0), loanOut=loans.reduce((s,x)=>s+Number(x.principal||0),0);
       const result={month,deposit,lateFine:fines,repayment,interest,topup,loanOut,totalProfit:interest+fines,createdAt:new Date().toISOString()}; out.innerHTML=`<div class="row"><span>Member Deposits</span><strong>${fmt(deposit)}</strong></div><div class="row"><span>Late Fine</span><strong>${fmt(fines)}</strong></div><div class="row"><span>Principal Repayment</span><strong>${fmt(repayment)}</strong></div><div class="row"><span>Interest Collected</span><strong>${fmt(interest)}</strong></div><div class="row"><span>Loan Top-Up</span><strong>${fmt(topup)}</strong></div><div class="row"><span>New Loan Disbursement</span><strong>${fmt(loanOut)}</strong></div><div class="row total"><span>Total Actual Profit</span><strong>${fmt(result.totalProfit)}</strong></div>`; return result;
     }
-    function saveMonthlyClosing(){ const r=calculateMonthlyClosing(); if(!r)return; if(isFYLockedForDate(r.month+'-01')){toast('Is FY mein month close update nahi kar sakte');return;} if(!Array.isArray(data.monthlyClosings))data.monthlyClosings=[]; const old=data.monthlyClosings.find(x=>x.month===r.month); if(old){if(!confirm('Is month ka closing already saved hai. Update karna hai?'))return; r.updatedAt=new Date().toISOString(); data.monthlyClosings=data.monthlyClosings.filter(x=>x.month!==r.month);} data.monthlyClosings.unshift(r); auditLog(old?'Monthly Closing Updated':'Monthly Closing Saved','CLOSE-M-'+r.month,'Month closed: '+r.month); saveData(); renderMonthlyClosingHistory(); toast('Month '+r.month+' closed'); }
+    async function saveMonthlyClosing(){
+  const r = calculateMonthlyClosing();
+  if(!r) return;
+
+  if(isFYLockedForDate(r.month + '-01')){
+    toast('Is FY mein month close update nahi kar sakte');
+    return;
+  }
+
+  if(!Array.isArray(data.monthlyClosings)){
+    data.monthlyClosings = [];
+  }
+
+  const old = data.monthlyClosings.find(x => x.month === r.month);
+
+  if(old){
+    const confirmClosing = await pathpediConfirm({
+      icon: '📅',
+      title: 'Update Monthly Closing',
+      message: 'Is month ka closing already saved hai. Update karne se pehle details check karein.',
+      body: `
+        <div style="display:grid;gap:.55rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:.9rem;">
+
+          <div style="display:flex;justify-content:space-between;gap:1rem;">
+            <span style="color:#667085;">Month</span>
+            <strong>${escapeHtml(r.month)}</strong>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;gap:1rem;">
+            <span style="color:#667085;">Opening Cash</span>
+            <strong>${fmt(r.openingCash || 0)}</strong>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;gap:1rem;">
+            <span style="color:#667085;">Cash Closing</span>
+            <strong>${fmt(r.cashClosing || 0)}</strong>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;gap:1rem;">
+            <span style="color:#667085;">Bank Closing</span>
+            <strong>${fmt(r.bankClosing || 0)}</strong>
+          </div>
+
+          <div style="border-top:1px solid #e2e8f0;padding-top:.6rem;display:flex;justify-content:space-between;gap:1rem;">
+            <span style="font-weight:700;">Total Closing</span>
+            <strong style="font-size:1.05rem;">${fmt(r.totalClosing || 0)}</strong>
+          </div>
+
+        </div>
+
+        <div style="margin-top:.75rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:.75rem;font-size:.85rem;">
+          ⚠️ Existing monthly closing update hoga. Original audit history mein record rahega.
+        </div>
+      `,
+      okText: 'Update Closing',
+      danger: false
+    });
+
+    if(!confirmClosing) return;
+
+    Object.assign(old, r);
+    old.updatedAt = new Date().toISOString();
+
+    auditLog(
+      'Monthly Closing Updated',
+      old.transactionId || ('MC-' + r.month),
+      'Existing monthly closing updated',
+      '',
+      r.totalClosing || 0
+    );
+
+  }else{
+
+    data.monthlyClosings.unshift({
+      ...r,
+      transactionId: transactionId('MC'),
+      createdAt: new Date().toISOString()
+    });
+
+    auditLog(
+      'Monthly Closing Saved',
+      r.month,
+      'Monthly closing saved',
+      '',
+      r.totalClosing || 0
+    );
+  }
+
+  saveData();
+  renderMonthlyClosingHistory();
+
+  toast(
+    old
+      ? 'Monthly closing updated successfully'
+      : 'Monthly closing saved successfully'
+  );
+}
     function renderMonthlyClosingHistory(){ const out=document.getElementById('monthlyCloseHistory'); if(!out)return; const rows=(data.monthlyClosings||[]).slice(0,24); out.innerHTML=rows.length?`<div style="overflow:auto"><table><thead><tr><th>Month</th><th>Deposits</th><th>Repayment</th><th>Interest</th><th>Fine</th><th>Loan Out</th><th>Profit</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${escapeHtml(x.month)}</td><td>${fmt(x.deposit)}</td><td>${fmt(x.repayment)}</td><td>${fmt(x.interest)}</td><td>${fmt(x.lateFine)}</td><td>${fmt(x.loanOut)}</td><td><strong>${fmt(x.totalProfit)}</strong></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No monthly closing saved yet.</div>'; }
 
         // ========== EXPORT ==========
