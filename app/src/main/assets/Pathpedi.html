@@ -2701,12 +2701,116 @@ if(!confirmReverseProfit) return;  x.status='reversed';x.reversedAt=new Date().t
 
     // ========== TOP-UP AUDIT HISTORY ==========
 
-    function reverseTopUp(id) {
-      if(!askDeletePassword())return; const x=(data.loanTopUps||[]).find(t=>t.id===id); if(!x||x.status==='reversed')return;
-      if(!confirm('Top-Up ko reverse karna hai? Loan outstanding se top-up amount minus hoga aur audit record rahega.'))return;
-      const loan=data.loans.find(l=>l.id===x.loanId); if(loan && !x.reversalApplied){loan.outstanding=Math.max(0,Number(loan.outstanding||0)-Number(x.amount||0)); x.reversalApplied=true;}
-      x.status='reversed'; x.reversedAt=new Date().toISOString(); auditLog('Loan Top-Up Reversed',x.transactionId||x.id,'Top-up amount removed from outstanding',x.memberId,x.amount); saveData(); toast('Top-Up reversed');
-    }
+    async function reverseTopUp(id) {
+  if (!askDeletePassword()) return;
+
+  const x = (data.loanTopUps || []).find(t => t.id === id);
+  if (!x) {
+    toast('Top-Up record not found');
+    return;
+  }
+
+  if (x.status === 'reversed' || x.status === 'cancelled') {
+    toast('Top-Up already reversed/cancelled');
+    return;
+  }
+
+  const loan = data.loans.find(l => l.id === x.loanId);
+
+  if (!loan) {
+    toast('Loan account not found');
+    return;
+  }
+
+  const topUpAmount = Number(x.amount || 0);
+  const currentOutstanding = Number(loan.outstanding || 0);
+  const outstandingAfterReverse = Math.max(
+    0,
+    currentOutstanding - topUpAmount
+  );
+
+  const topUpMember = x.memberId
+    ? memberName(x.memberId)
+    : memberName(loan.memberId);
+
+  const confirmTopUpReverse = await pathpediConfirm({
+    icon: '↩️',
+    title: 'Reverse Loan Top-Up',
+    message: 'Loan Top-Up reverse karne se pehle details check karein.',
+    body: `
+      <div style="display:grid;gap:.55rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:.9rem;">
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Top-Up Transaction</span>
+          <strong>${escapeHtml(x.transactionId || x.id || '-')}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Loan ID</span>
+          <strong>${escapeHtml(x.loanId || loan.id || '-')}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Member</span>
+          <strong>${escapeHtml(topUpMember || '-')}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Top-Up Amount</span>
+          <strong>${fmt(topUpAmount)}</strong>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:1rem;">
+          <span style="color:#667085;">Current Outstanding</span>
+          <strong>${fmt(currentOutstanding)}</strong>
+        </div>
+
+        <div style="border-top:1px solid #e2e8f0;padding-top:.6rem;display:flex;justify-content:space-between;gap:1rem;">
+          <span style="font-weight:700;">Outstanding After Reverse</span>
+          <strong style="font-size:1.05rem;">${fmt(outstandingAfterReverse)}</strong>
+        </div>
+
+      </div>
+
+      <div style="margin-top:.75rem;background:#fff1f2;border:1px solid #fecdd3;border-radius:12px;padding:.75rem;font-size:.82rem;color:#9f1239;">
+        ⚠️ Top-Up reverse hone par Top-Up amount loan outstanding se minus hoga.
+        <strong>Loan ID same rahega.</strong>
+        Original Top-Up record delete nahi hoga; status
+        <strong>Reversed</strong> hoga aur audit history mein record rahega.
+      </div>
+    `,
+    okText: 'Reverse Top-Up',
+    danger: true
+  });
+
+  if (!confirmTopUpReverse) return;
+
+  // Reverse top-up effect only once
+  if (!x.reversalApplied) {
+    loan.outstanding = Math.max(
+      0,
+      Number(loan.outstanding || 0) - topUpAmount
+    );
+
+    x.reversalApplied = true;
+  }
+
+  x.status = 'reversed';
+  x.reversedAt = new Date().toISOString();
+
+  auditLog(
+    'Loan Top-Up Reversed',
+    x.transactionId || x.id,
+    'Loan Top-Up reversed; same Loan ID retained',
+    x.memberId || loan.memberId,
+    x.amount
+  );
+
+  saveData();
+  refreshUI();
+
+  toast('Loan Top-Up reversed — same Loan ID retained');
+}
 
     function renderTopUpAuditSummary() {
       const el = document.getElementById('topUpAuditSummary');
