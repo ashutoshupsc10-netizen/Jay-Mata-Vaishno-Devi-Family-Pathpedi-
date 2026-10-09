@@ -1341,6 +1341,28 @@
   </div>
 </div>
 <!-- ========== END PATHPEDI CONFIRM MODAL ========== -->
+<!-- PATHPEDI STYLISH ADMIN PASSWORD MODAL -->
+<div class="pp-modal-backdrop" id="ppPasswordModal" role="dialog" aria-modal="true" aria-labelledby="ppPasswordTitle">
+  <div class="pp-modal" id="ppPasswordCard">
+    <div class="pp-modal-head">
+      <div class="pp-modal-icon">🔐</div>
+      <div>
+        <div class="pp-modal-title" id="ppPasswordTitle">Admin Password Required</div>
+        <div class="pp-modal-message">Sensitive action ko continue karne ke liye apna Admin Password enter karein.</div>
+      </div>
+    </div>
+    <div class="pp-modal-body">
+      <label for="ppAdminPasswordInput" style="display:block;margin-bottom:.4rem;color:#475569;font-weight:600;">Admin Password</label>
+      <input id="ppAdminPasswordInput" type="password" inputmode="text" autocomplete="current-password" autocapitalize="off" spellcheck="false" placeholder="Enter password" style="width:100%;padding:.8rem .9rem;border:1px solid #cbd5e1;border-radius:10px;font-size:1rem;">
+      <div id="ppAdminPasswordError" style="display:none;color:#b91c1c;font-size:.83rem;margin-top:.5rem;">Password galat hai. Dobara try karein.</div>
+    </div>
+    <div class="pp-modal-actions">
+      <button type="button" class="btn pp-modal-cancel" id="ppPasswordCancel">Cancel</button>
+      <button type="button" class="btn btn-primary pp-modal-ok" id="ppPasswordSubmit">Unlock</button>
+    </div>
+  </div>
+</div>
+<!-- END PATHPEDI STYLISH ADMIN PASSWORD MODAL -->
   <script>
     // ========== PATHPEDI COMMON STYLISH CONFIRMATION ==========
 
@@ -1357,7 +1379,7 @@ function pathpediConfirm(options = {}) {
     const cancel = document.getElementById('ppConfirmCancel');
 
     if (!modal || !card || !icon || !title || !msg || !body || !ok || !cancel) {
-      resolve(window.confirm(options.message || ''));
+      resolve(false);
       return;
     }
 
@@ -1669,20 +1691,73 @@ window.pathpediConfirm = pathpediConfirm;
     const DELETE_PASSWORD = 'vaishno';
 
     function askDeletePassword() {
-      const pwd = prompt('⚠️ Admin PIN daalein:');
-      if (pwd === null) return false;
-      const expected = data.adminPin || DELETE_PASSWORD;
-      if (pwd === expected) return true;
-      toast('Galat Admin Password! Action cancel ho gaya.');
-      return false;
+      return new Promise(resolve => {
+        const modal = document.getElementById('ppPasswordModal');
+        const input = document.getElementById('ppAdminPasswordInput');
+        const submit = document.getElementById('ppPasswordSubmit');
+        const cancel = document.getElementById('ppPasswordCancel');
+        const error = document.getElementById('ppAdminPasswordError');
+        if (!modal || !input || !submit || !cancel || !error) {
+          toast('Stylish password dialog load nahi hua. Page reload karke dobara try karein.');
+          resolve(false);
+          return;
+        }
+        input.value = '';
+        error.style.display = 'none';
+        modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+        let done = false;
+        const finish = value => {
+          if (done) return;
+          done = true;
+          modal.classList.remove('show');
+          document.body.style.overflow = '';
+          submit.removeEventListener('click', onSubmit);
+          cancel.removeEventListener('click', onCancel);
+          input.removeEventListener('keydown', onKeyDown);
+          modal.removeEventListener('click', onBackdrop);
+          document.removeEventListener('keydown', onEscape);
+          resolve(value);
+        };
+        const onSubmit = () => {
+          const expected = data.adminPin || DELETE_PASSWORD;
+          if (input.value === expected) {
+            finish(true);
+          } else {
+            error.style.display = 'block';
+            input.value = '';
+            input.focus();
+          }
+        };
+        const onCancel = () => finish(false);
+        const onKeyDown = e => { if (e.key === 'Enter') onSubmit(); };
+        const onBackdrop = e => { if (e.target === modal) finish(false); };
+        const onEscape = e => { if (e.key === 'Escape' && modal.classList.contains('show')) finish(false); };
+        submit.addEventListener('click', onSubmit);
+        cancel.addEventListener('click', onCancel);
+        input.addEventListener('keydown', onKeyDown);
+        modal.addEventListener('click', onBackdrop);
+        document.addEventListener('keydown', onEscape);
+        setTimeout(() => input.focus(), 80);
+      });
     }
 
 
     // Block new/backdated entries in a locked financial year.
-    document.addEventListener('submit', function(e) {
-      const f=e.target; const dateEl=f.querySelector('[id$=\"Date\"], input[type=\"date\"]');
+    document.addEventListener('submit', async function(e) {
+      const f=e.target;
+      const dateEl=f.querySelector('[id$="Date"], input[type="date"]');
       const date=dateEl?.value;
-      if(date && isFYLockedForDate(date)) { e.preventDefault(); e.stopImmediatePropagation(); alert('Financial Year '+fyForDate(date)+' is LOCKED. New/backdated entry allowed nahi hai.'); }
+      if(date && isFYLockedForDate(date)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        await pathpediConfirm({
+          icon:'🔒',
+          title:'Financial Year Locked',
+          message:'Financial Year '+fyForDate(date)+' LOCKED hai. Is FY mein new/backdated entry allowed nahi hai.',
+          okText:'Understood'
+        });
+      }
     }, true);
 
     // ========== INTEREST CALCULATIONS ==========
@@ -1738,7 +1813,7 @@ window.pathpediConfirm = pathpediConfirm;
     });
 
     // ========== MEMBERS ==========
-    document.getElementById('memberForm').addEventListener('submit', e => {
+    document.getElementById('memberForm').addEventListener('submit', async e => {
       e.preventDefault();
       const name = document.getElementById('mName').value.trim();
       if (!name) return;
@@ -1758,6 +1833,18 @@ window.pathpediConfirm = pathpediConfirm;
         status: 'active',
         entryDateTime: getEntryDateTime('mJoinDateTime')
       };
+      const addOk = await pathpediConfirm({
+        icon:'👤', title:'Add New Member?',
+        message:'Member details save karne se pehle verify karein.',
+        body:`<div style="display:grid;gap:.45rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:.85rem;">
+          <div><span style="color:#64748b;">Member ID</span><br><strong>${escapeHtml(member.id)}</strong></div>
+          <div><span style="color:#64748b;">Name</span><br><strong>${escapeHtml(member.name)}</strong></div>
+          <div><span style="color:#64748b;">Mobile</span><br><strong>${escapeHtml(member.mobile||'—')}</strong></div>
+          <div><span style="color:#64748b;">Join Date</span><br><strong>${escapeHtml(member.joinDate)}</strong></div>
+        </div>`,
+        okText:'Add Member'
+      });
+      if(!addOk)return;
       data.members.push(member);
       data.nextMemberId++;
       addActivity('Member Added', name, 0, 'New member', member.entryDateTime);
@@ -1773,13 +1860,13 @@ window.pathpediConfirm = pathpediConfirm;
       document.getElementById('mJoinDate').value = today();
     });
 
-    function toggleMemberStatus(id) {
-      const m = getMember(id);
-      if (!m) return;
-      m.status = m.status === 'inactive' ? 'active' : 'inactive';
+    async function toggleMemberStatus(id) {
+      const m = getMember(id);if (!m) return;
+      const nextStatus=m.status === 'inactive' ? 'active' : 'inactive';
+      const ok=await pathpediConfirm({icon:nextStatus==='inactive'?'⏸️':'✅',title:nextStatus==='inactive'?'Deactivate Member?':'Activate Member?',message:`${m.name} ka status ${nextStatus==='inactive'?'Inactive':'Active'} karna hai?`,okText:nextStatus==='inactive'?'Deactivate':'Activate',danger:nextStatus==='inactive'});
+      if(!ok)return;m.status=nextStatus;
       addActivity(m.status === 'inactive' ? 'Member Inactive' : 'Member Activated', m.name, 0, id);
-      saveData();
-      toast(m.status === 'inactive' ? 'Member marked inactive' : 'Member activated');
+      saveData();toast(m.status === 'inactive' ? 'Member marked inactive' : 'Member activated');
     }
 
     function showMemberStatement(id) {
@@ -1798,9 +1885,16 @@ window.pathpediConfirm = pathpediConfirm;
 
     function escapeHtml(v){ return String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-    function deleteMember(id) {
-      if (!askDeletePassword()) return;
-      if (!confirm('Delete this member? Deposits and loans linked to them will remain but show as Unknown.')) return;
+    async function deleteMember(id) {
+      if (!(await askDeletePassword())) return;
+      const member = getMember(id);
+      const ok = await pathpediConfirm({
+        icon:'🗑️', title:'Delete Member?',
+        message:`${member?.name || id} ko delete karna hai?`,
+        body:'<div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:12px;padding:.85rem;color:#9f1239;">Linked deposits and loans delete nahi honge; member reference Unknown dikh sakta hai. Financial audit ke liye pehle deactivate karna behtar hai.</div>',
+        okText:'Delete Member', danger:true
+      });
+      if (!ok) return;
       data.members = data.members.filter(m => m.id !== id);
       saveData();
       toast('Member deleted');
@@ -1948,7 +2042,7 @@ window.pathpediConfirm = pathpediConfirm;
     });
 
     async function reverseRecord(arrName, id, label) {
-      if (!askDeletePassword()) return;
+      if (!(await askDeletePassword())) return;
       const arr=data[arrName]||[]; const rec=arr.find(x=>x.id===id);
       if(!rec) return; if(rec.status==='reversed'||rec.status==='cancelled'){toast('Record already reversed/cancelled');return;}
       const recMember = rec.memberId ? memberName(rec.memberId) : '–';
@@ -1997,7 +2091,7 @@ if (!confirmReverse) return;
       saveData(); toast(label+' reversed — original record retained');
     }
    async function deleteMember(id) {
-      if (!askDeletePassword()) return;
+      if (!(await askDeletePassword())) return;
       const m=data.members.find(x=>x.id===id); if(!m)return;
       const member = data.members.find(m => m.id === id);
 if (!member) return;
@@ -2035,7 +2129,7 @@ if (!confirmMember) return;
     function deleteDeposit(id) { reverseRecord('deposits',id,'Deposit'); }
     function deleteLoan(id) { reverseRecord('loans',id,'Loan'); }
    async function deleteRepayment(id) {
-  if (!askDeletePassword()) return;
+  if (!(await askDeletePassword())) return;
 
   const rep = data.repayments.find(r => r.id === id);
   if (!rep) return;
@@ -2133,7 +2227,7 @@ if (!confirmMember) return;
   toast('Repayment reversed — principal restored');
 }
     async function deleteInterestAccrual(id) {
-  if (!askDeletePassword()) return;
+  if (!(await askDeletePassword())) return;
 
   const acc = (data.interestAccruals || []).find(a => a.id === id);
   if (!acc) return;
@@ -2652,7 +2746,7 @@ if (!confirmMember) return;
 });
 
 if(!confirmProfit) return; if(!Array.isArray(data.profitDistributions))data.profitDistributions=[];data.profitDistributions.unshift({transactionId:transactionId('PROF'),id:'PD'+Date.now(),financialYear:r.fy,date:r.date,totalProfit:r.total,profitPerMember:r.per,eligibleMembers:r.good.length,memberCredits:r.good.map(x=>({memberId:x.m.id,name:x.m.name,amount:r.per})),remainder:r.rem,status:'confirmed'});addActivity('Profit Distribution','Eligible Members',r.total,r.fy+' · '+r.date);saveData();renderProfitHistory();calculateProfitDistribution();toast('Profit distribution recorded');}
-  async function reverseProfitDistribution(id){if(!askDeletePassword())return;const x=(data.profitDistributions||[]).find(d=>d.id===id);if(!x||x.status==='reversed')return;
+  async function reverseProfitDistribution(id){if(!(await askDeletePassword()))return;const x=(data.profitDistributions||[]).find(d=>d.id===id);if(!x||x.status==='reversed')return;
                                              const confirmReverseProfit = await pathpediConfirm({
   icon: '⚠️',
   title: 'Reverse Profit Distribution',
@@ -2702,7 +2796,7 @@ if(!confirmReverseProfit) return;  x.status='reversed';x.reversedAt=new Date().t
     // ========== TOP-UP AUDIT HISTORY ==========
 
     async function reverseTopUp(id) {
-  if (!askDeletePassword()) return;
+  if (!(await askDeletePassword())) return;
 
   const x = (data.loanTopUps || []).find(t => t.id === id);
   if (!x) {
@@ -2842,7 +2936,7 @@ if(!confirmReverseProfit) return;  x.status='reversed';x.reversedAt=new Date().t
       </div>`;
     }
 
-    function showTopUpAuditHistory(loanId) {
+    async function showTopUpAuditHistory(loanId) {
       const loan = data.loans.find(l => String(l.id) === String(loanId));
       if (!loan) { toast('Loan account not found'); return; }
 
@@ -2851,7 +2945,7 @@ if(!confirmReverseProfit) return;  x.status='reversed';x.reversedAt=new Date().t
         .sort((a,b) => String(a.date).localeCompare(String(b.date)));
 
       if (!rows.length) {
-        alert(`Top-Up Audit History — ${loanId}\n\nNo Top-Up recorded.`);
+        await pathpediConfirm({icon:'📜',title:`Top-Up Audit History — ${loanId}`,message:'No Top-Up recorded.',okText:'Close'});
         return;
       }
 
@@ -2861,7 +2955,7 @@ if(!confirmReverseProfit) return;  x.status='reversed';x.reversedAt=new Date().t
         (t.note ? `\n   Note: ${t.note}` : '')
       ).join('\n\n');
 
-      alert(`Top-Up Audit History — ${loanId}\nMember: ${loan.memberName || ''}\n\n${lines}`);
+      await pathpediConfirm({icon:'📜',title:`Top-Up Audit History — ${loanId}`,message:`Member: ${loan.memberName || ''}\n\n${lines}`,okText:'Close'});
     }
 
     function getTopUpCount(loanId) {
@@ -3033,11 +3127,26 @@ if(!confirmReverseProfit) return;  x.status='reversed';x.reversedAt=new Date().t
       const box=document.getElementById('cashClosingPreview'); if(box)box.innerHTML=`<div class="row"><span>Cash In</span><strong>${fmt(depCash+repCash+intCash)}</strong></div><div class="row"><span>Cash Loan Out</span><strong>${fmt(loanCash)}</strong></div><div class="row total"><span>Closing Cash</span><strong>${fmt(cashClosing)}</strong></div><div class="row"><span>Bank Net Movement</span><strong>${fmt(bankDep+bankRep+bankInt-bankLoan)}</strong></div><div class="row total"><span>Closing Bank</span><strong>${fmt(bankClosing)}</strong></div>`;
       return result;
     }
-    function saveCashClosing(){ const r=calculateCashClosing(); if(!r)return; if(!Array.isArray(data.cashClosings))data.cashClosings=[]; data.cashClosings.unshift(r); auditLog('Daily Closing Saved','CLOSE-'+r.date,'Cash '+fmt(r.cashClosing)+' · Bank '+fmt(r.bankClosing)); saveData(); renderCashClosingHistory(); toast('Daily closing saved'); }
+    async function saveCashClosing(){
+      const r=calculateCashClosing();if(!r)return;
+      const ok=await pathpediConfirm({icon:'💵',title:'Save Cash/Bank Closing?',message:`${r.date} ka daily cash aur bank closing save karna hai?`,body:`<div style="display:grid;gap:.45rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:.85rem;"><div style="display:flex;justify-content:space-between"><span>Opening Cash</span><strong>${fmt(r.openingCash)}</strong></div><div style="display:flex;justify-content:space-between"><span>Closing Cash</span><strong>${fmt(r.cashClosing)}</strong></div><div style="display:flex;justify-content:space-between"><span>Opening Bank</span><strong>${fmt(r.openingBank)}</strong></div><div style="display:flex;justify-content:space-between"><span>Closing Bank</span><strong>${fmt(r.bankClosing)}</strong></div></div>`,okText:'Save Closing'});
+      if(!ok)return;
+      if(!Array.isArray(data.cashClosings))data.cashClosings=[];
+      data.cashClosings.unshift(r);auditLog('Daily Closing Saved','CLOSE-'+r.date,'Cash '+fmt(r.cashClosing)+' · Bank '+fmt(r.bankClosing));saveData();renderCashClosingHistory();toast('Daily closing saved');
+    }
     function renderCashClosingHistory(){ const out=document.getElementById('cashClosingHistory'); if(!out)return; const rows=(data.cashClosings||[]).slice(0,20); out.innerHTML=rows.length?`<div style="overflow:auto"><table><thead><tr><th>Date</th><th>Opening Cash</th><th>Closing Cash</th><th>Opening Bank</th><th>Closing Bank</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${fmt(x.openingCash)}</td><td>${fmt(x.cashClosing)}</td><td>${fmt(x.openingBank)}</td><td>${fmt(x.bankClosing)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No daily closing saved yet.</div>'; }
     function renderProfitReconciliation(){ const box=document.getElementById('profitReconciliationBox'); if(!box)return; const interest=(data.interestAccruals||[]).filter(x=>x.status!=='reversed').reduce((s,x)=>s+Number(x.amount||0),0); const fine=(data.deposits||[]).filter(x=>x.status!=='reversed').reduce((s,x)=>s+Number(x.lateFine||0),0); const distributed=(data.profitDistributions||[]).filter(x=>x.status!=='reversed').reduce((s,x)=>s+Number(x.totalProfit||0),0); const profit=interest+fine; box.innerHTML=`<div class="row"><span>Actual Interest Collected</span><strong>${fmt(interest)}</strong></div><div class="row"><span>Late Fine Collected</span><strong>${fmt(fine)}</strong></div><div class="row total"><span>Total Actual Profit</span><strong>${fmt(profit)}</strong></div><div class="row"><span>Profit Already Distributed</span><strong>${fmt(distributed)}</strong></div><div class="row total"><span>Undistributed Profit</span><strong>${fmt(Math.max(0,profit-distributed))}</strong></div>`; }
     function renderAdminPinStatus(){ const el=document.getElementById('adminPinStatus'); if(el)el.textContent='Admin PIN is set. Sensitive actions are protected.'; }
-    function saveAdminPin(){ const a=document.getElementById('newAdminPin')?.value||'',b=document.getElementById('confirmAdminPin')?.value||''; if(a.length<4){toast('Password minimum 4 characters hona chahiye');return;} if(a!==b){toast('PIN match nahi hai');return;} if(!askDeletePassword())return; data.adminPin=a; auditLog('Admin PIN Changed','','Admin PIN updated'); saveData(); document.getElementById('newAdminPin').value='';document.getElementById('confirmAdminPin').value='';renderAdminPinStatus();toast('Admin PIN updated'); }
+    async function saveAdminPin(){
+      const a=document.getElementById('newAdminPin')?.value||'',b=document.getElementById('confirmAdminPin')?.value||'';
+      if(a.length<4){toast('Password minimum 4 characters hona chahiye');return;}
+      if(a!==b){toast('Password match nahi hai');return;}
+      if(!(await askDeletePassword()))return;
+      const ok=await pathpediConfirm({icon:'🔐',title:'Change Admin Password?',message:'Naya Admin Password save karna hai? Sensitive actions ke liye isi password ki zarurat hogi.',body:`<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:.8rem;color:#1e40af;">Password update hone ke baad purana password use nahi hoga.</div>`,okText:'Update Password',danger:true});
+      if(!ok)return;
+      data.adminPin=a;auditLog('Admin PIN Changed','','Admin password updated');saveData();
+      document.getElementById('newAdminPin').value='';document.getElementById('confirmAdminPin').value='';renderAdminPinStatus();toast('Admin password updated');
+    }
 
 
     // ========== PHASE 1: RECEIPTS / LEDGERS / MONTHLY CLOSING ==========
@@ -3490,7 +3599,7 @@ toast('Android CSV save failed');
       const file = e.target.files && e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = function(ev) {
+      reader.onload = async function(ev) {
         try {
           const parsed = JSON.parse(ev.target.result);
           if (!parsed || typeof parsed !== 'object') throw new Error('Invalid file');
@@ -3498,15 +3607,20 @@ toast('Android CSV save failed');
           if (!Array.isArray(parsed.members) && !Array.isArray(parsed.loans) && !Array.isArray(parsed.deposits)) {
             throw new Error('Yeh Pathpedi backup file nahi lagti');
           }
-          if (!confirm('Restore karne se CURRENT data replace ho jaayega.\n\nMembers: ' + (parsed.members || []).length +
-            '\nDeposits: ' + (parsed.deposits || []).length +
-            '\nLoans: ' + (parsed.loans || []).length +
-            '\nRepayments: ' + (parsed.repayments || []).length +
-            '\n\nContinue?')) {
-            e.target.value = '';
-            return;
-          }
-          if (!askDeletePassword()) {
+          const restoreOk = await pathpediConfirm({
+            icon:'♻️', title:'Restore Backup?',
+            message:'Restore karne se CURRENT data replace ho jaayega.',
+            body:`<div style="display:grid;gap:.5rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:.85rem;">
+              <div style="display:flex;justify-content:space-between"><span>Members</span><strong>${(parsed.members||[]).length}</strong></div>
+              <div style="display:flex;justify-content:space-between"><span>Deposits</span><strong>${(parsed.deposits||[]).length}</strong></div>
+              <div style="display:flex;justify-content:space-between"><span>Loans</span><strong>${(parsed.loans||[]).length}</strong></div>
+              <div style="display:flex;justify-content:space-between"><span>Repayments</span><strong>${(parsed.repayments||[]).length}</strong></div>
+              <p style="color:#b91c1c;font-size:.85rem;margin-top:.25rem;">Current records overwrite honge. Pehle backup rakhna zaroori hai.</p>
+            </div>`,
+            okText:'Continue Restore', danger:true
+          });
+          if (!restoreOk) { e.target.value = ''; return; }
+          if (!(await askDeletePassword())) {
             e.target.value = '';
             return;
           }
@@ -3530,10 +3644,25 @@ toast('Android CSV save failed');
       reader.readAsText(file);
     });
 
-    document.getElementById('clearAllBtn').addEventListener('click', () => {
-      if (!askDeletePassword()) return;
-      if (!confirm('This will permanently delete ALL members, deposits, loans and repayments. Are you sure?')) return;
-      if (!confirm('Final confirmation – clear everything?')) return;
+    document.getElementById('clearAllBtn').addEventListener('click', async () => {
+      if (!(await askDeletePassword())) return;
+      const firstCheck = await pathpediConfirm({
+        icon: '🗑️',
+        title: 'Clear All Data?',
+        message: 'Yeh emergency reset hai. Is action se current accounting data remove ho jayega.',
+        body: '<div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:12px;padding:.85rem;color:#9f1239;font-size:.88rem;"><strong>Warning:</strong> Members, deposits, loans, repayments aur related records clear honge. Pehle full backup lena zaroori hai.</div>',
+        okText: 'Continue',
+        danger: true
+      });
+      if (!firstCheck) return;
+      const finalCheck = await pathpediConfirm({
+        icon: '⚠️',
+        title: 'Final Confirmation',
+        message: 'Kya aap waqai saara Pathpedi data permanently clear karna chahte hain? Is action ko undo nahi kiya ja sakta.',
+        okText: 'Yes, Clear All Data',
+        danger: true
+      });
+      if (!finalCheck) return;
       data = defaultData();
       saveData();
       toast('All data cleared');
@@ -3607,8 +3736,11 @@ toast('Android CSV save failed');
 
     function initPhase5(){
       p5Settings();
-      document.getElementById('saveBackupReminderBtn')?.addEventListener('click',()=>{
-        const v=Number(document.getElementById('backupReminderDays').value); data.phase5Settings.backupReminderDays=v; auditLog('Backup Reminder Updated','P5-SETTINGS','Reminder '+(v?v+' day(s)':'disabled')); saveData(); renderPhase5Safety(); toast(v?'Backup reminder saved':'Backup reminder off');
+      document.getElementById('saveBackupReminderBtn')?.addEventListener('click',async()=>{
+        const v=Number(document.getElementById('backupReminderDays').value);
+        const ok=await pathpediConfirm({icon:'⏰',title:'Update Backup Reminder?',message:v?`Backup reminder har ${v} din baad check karne ke liye set karna hai?`:'Backup reminder disable karna hai?',okText:'Save Reminder',danger:!v});
+        if(!ok)return;
+        data.phase5Settings.backupReminderDays=v;auditLog('Backup Reminder Updated','P5-SETTINGS','Reminder '+(v?v+' day(s)':'disabled'));saveData();renderPhase5Safety();toast(v?'Backup reminder saved':'Backup reminder off');
       });
       document.getElementById('phase5BackupNowBtn')?.addEventListener('click',()=>downloadFullBackup(true));
       document.getElementById('verifyCurrentDataBtn')?.addEventListener('click',runPhase5CurrentCheck);
@@ -3896,8 +4028,21 @@ toast('Android CSV save failed');
     document.getElementById('showLoanStatementBtn')?.addEventListener('click',showAuditLoanStatement);
     document.getElementById('exportAuditBtn')?.addEventListener('click',exportAuditCSV);
     document.getElementById('auditFY')?.addEventListener('change',renderFYLocks);
-    document.getElementById('lockFYBtn')?.addEventListener('click',()=>{const fy=document.getElementById('auditFY').value;if(!fy)return;if(!confirm('FY '+fy+' ko LOCK karna hai? Is FY mein new/backdated entries block ho jayengi.'))return;data.financialYearLocks[fy]={lockedAt:new Date().toISOString()};auditLog('Financial Year Locked',fy,'Accounting period closed');saveData();toast('FY '+fy+' locked');});
-    document.getElementById('unlockFYBtn')?.addEventListener('click',()=>{const fy=document.getElementById('auditFY').value;if(!data.financialYearLocks?.[fy]){toast('FY already open');return;}if(!askDeletePassword())return;if(!confirm('FY '+fy+' ko unlock karna hai?'))return;delete data.financialYearLocks[fy];auditLog('Financial Year Unlocked',fy,'Accounting period reopened');saveData();toast('FY '+fy+' unlocked');});
+    document.getElementById('lockFYBtn')?.addEventListener('click',async()=>{
+      const fy=document.getElementById('auditFY').value;if(!fy)return;
+      const ok=await pathpediConfirm({icon:'🔒',title:'Lock Financial Year?',message:`FY ${fy} ko lock karne ke baad is FY mein new/backdated entries block ho jayengi.`,body:'<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:.8rem;color:#9a3412;">Lock karne se pehle month/year records verify kar lein.</div>',okText:'Lock FY',danger:true});
+      if(!ok)return;
+      data.financialYearLocks[fy]={lockedAt:new Date().toISOString()};
+      auditLog('Financial Year Locked',fy,'Accounting period closed');saveData();toast('FY '+fy+' locked');
+    });
+    document.getElementById('unlockFYBtn')?.addEventListener('click',async()=>{
+      const fy=document.getElementById('auditFY').value;
+      if(!data.financialYearLocks?.[fy]){toast('FY already open');return;}
+      if(!(await askDeletePassword()))return;
+      const ok=await pathpediConfirm({icon:'🔓',title:'Unlock Financial Year?',message:`FY ${fy} ko unlock karne par us financial year mein entries dobara allow hongi.`,okText:'Unlock FY',danger:true});
+      if(!ok)return;
+      delete data.financialYearLocks[fy];auditLog('Financial Year Unlocked',fy,'Accounting period reopened');saveData();toast('FY '+fy+' unlocked');
+    });
     document.getElementById('globalSearchBtn')?.addEventListener('click',runGlobalSearch);
     document.getElementById('globalSearchInput')?.addEventListener('keydown',e=>{if(e.key==='Enter')runGlobalSearch();});
     document.getElementById('calculateCashClosingBtn')?.addEventListener('click',calculateCashClosing);
@@ -4031,8 +4176,10 @@ document.getElementById('saveMonthlyCloseBtn')?.addEventListener('click',saveMon
       const d=data.phase3Settings||{};
       return {interestDueDay:Math.min(28,Math.max(1,Number(d.interestDueDay)||15))};
     }
-    function phase3SaveSettings(){
+    async function phase3SaveSettings(){
       const day=Math.min(28,Math.max(1,Number(document.getElementById('p3DueDay')?.value)||15));
+      const ok=await pathpediConfirm({icon:'⚙️',title:'Update Interest Due Day?',message:`Monthly loan interest ki due date har month ${day} tareekh set karni hai?`,okText:'Save Settings'});
+      if(!ok)return;
       data.phase3Settings={interestDueDay:day};
       auditLog('Phase 3 Settings Updated','',`Interest due day set to ${day}`,null,0);
       saveData();
@@ -4203,10 +4350,37 @@ document.getElementById('saveMonthlyCloseBtn')?.addEventListener('click',saveMon
     function p7Selected(){const id=document.getElementById('p7MemberSelect')?.value;return id?getMember(id):null;}
     function p7Sum(a){return (a||[]).filter(x=>x.status!=='reversed'&&x.cancelled!==true).reduce((s,x)=>s+Number(x.amount||0),0);}
     function p7Load(){const m=p7Selected();if(!m)return;document.getElementById('p7Id').value=m.id||'';document.getElementById('p7Name').value=m.name||'';document.getElementById('p7Mobile').value=m.mobile||'';document.getElementById('p7JoinDate').value=m.joinDate||'';document.getElementById('p7Address').value=m.address||'';document.getElementById('p7NomineeName').value=m.nomineeName||'';document.getElementById('p7NomineeRelation').value=m.nomineeRelation||'';document.getElementById('p7NomineeMobile').value=m.nomineeMobile||'';document.getElementById('p7Status').value=m.status||'active';document.getElementById('p7PhotoPreview').innerHTML=m.photo?`<img src="${m.photo}" style="width:90px;height:90px;object-fit:cover;border-radius:12px;border:1px solid #ddd;">`:'<span style="color:var(--muted);">No photo</span>';const deps=data.deposits.filter(x=>x.memberId===m.id),loans=data.loans.filter(x=>x.memberId===m.id),reps=data.repayments.filter(x=>x.memberId===m.id),ints=(data.interestAccruals||[]).filter(x=>x.memberId===m.id),fine=deps.reduce((s,x)=>s+Number(x.lateFine||0),0),profit=(data.profitDistributions||[]).filter(d=>d.status!=='reversed').reduce((s,d)=>s+(d.memberCredits||[]).filter(c=>c.memberId===m.id).reduce((a,c)=>a+Number(c.amount||0),0),0),outstanding=loans.filter(l=>l.status==='active').reduce((s,l)=>s+Number(l.outstanding||0),0);document.getElementById('p7Deposits').textContent=fmt(p7Sum(deps));document.getElementById('p7LoanOutstanding').textContent=fmt(outstanding);document.getElementById('p7InterestPaid').textContent=fmt(p7Sum(ints));document.getElementById('p7ProfitReceived').textContent=fmt(profit);document.getElementById('p7FinancialDetails').innerHTML=`<div class="grid-4"><div class="stat-card"><div class="label">Principal Repaid</div><div class="value">${fmt(p7Sum(reps))}</div></div><div class="stat-card profit"><div class="label">Late Fine Paid</div><div class="value">${fmt(fine)}</div></div><div class="stat-card"><div class="label">Active Loans</div><div class="value">${loans.filter(l=>l.status==='active').length}</div></div><div class="stat-card"><div class="label">Savings + Profit</div><div class="value">${fmt(p7Sum(deps)+profit)}</div></div></div>`;p7RenderPassbook();}
-    function p7Save(){const m=p7Selected();if(!m){toast('Member select karein');return;}const name=document.getElementById('p7Name').value.trim();if(!name){toast('Member name required');return;}Object.assign(m,{name,mobile:document.getElementById('p7Mobile').value.trim(),joinDate:document.getElementById('p7JoinDate').value||m.joinDate,address:document.getElementById('p7Address').value.trim(),nomineeName:document.getElementById('p7NomineeName').value.trim(),nomineeRelation:document.getElementById('p7NomineeRelation').value.trim(),nomineeMobile:document.getElementById('p7NomineeMobile').value.trim(),status:document.getElementById('p7Status').value});saveData();renderMembers();fillMemberSelects();p7PopulateMembers();document.getElementById('p7MemberSelect').value=m.id;p7Load();toast('Member profile updated');}
+    async function p7Save(){
+      const m=p7Selected();if(!m){toast('Member select karein');return;}
+      const name=document.getElementById('p7Name').value.trim();if(!name){toast('Member name required');return;}
+      const details=`<div style="display:grid;gap:.45rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:.85rem;"><div><span style="color:#64748b;">Member ID</span><br><strong>${escapeHtml(m.id)}</strong></div><div><span style="color:#64748b;">Name</span><br><strong>${escapeHtml(name)}</strong></div><div><span style="color:#64748b;">Mobile</span><br><strong>${escapeHtml(document.getElementById('p7Mobile').value.trim()||'—')}</strong></div></div>`;
+      const ok=await pathpediConfirm({icon:'✏️',title:'Update Member Profile?',message:'Member ki profile details save karni hain?',body:details,okText:'Save Changes'});
+      if(!ok)return;
+      Object.assign(m,{name,mobile:document.getElementById('p7Mobile').value.trim(),joinDate:document.getElementById('p7JoinDate').value||m.joinDate,address:document.getElementById('p7Address').value.trim(),nomineeName:document.getElementById('p7NomineeName').value.trim(),nomineeRelation:document.getElementById('p7NomineeRelation').value.trim(),nomineeMobile:document.getElementById('p7NomineeMobile').value.trim(),status:document.getElementById('p7Status').value});
+      saveData();renderMembers();fillMemberSelects();p7PopulateMembers();document.getElementById('p7MemberSelect').value=m.id;p7Load();toast('Member profile updated');
+    }
     function p7Rows(){const m=p7Selected();if(!m)return[];let r=[];data.deposits.filter(x=>x.memberId===m.id).forEach(x=>r.push({date:x.date,type:'Deposit',ref:x.transactionId||'—',amount:Number(x.amount||0),details:`Monthly deposit${Number(x.lateFine||0)?' + Late Fine '+fmt(x.lateFine):''}`}));data.repayments.filter(x=>x.memberId===m.id).forEach(x=>r.push({date:x.date,type:'Loan Repayment',ref:x.transactionId||'—',amount:Number(x.amount||0),details:'Principal repayment'}));(data.interestAccruals||[]).filter(x=>x.memberId===m.id).forEach(x=>r.push({date:x.date,type:'Interest Paid',ref:x.transactionId||'—',amount:Number(x.amount||0),details:'Monthly loan interest'}));(data.profitDistributions||[]).filter(d=>d.status!=='reversed').forEach(d=>(d.memberCredits||[]).filter(c=>c.memberId===m.id).forEach(c=>r.push({date:d.date,type:'Profit Distribution',ref:d.transactionId||'—',amount:Number(c.amount||0),details:'Profit credited'})));return r.sort((a,b)=>String(a.date).localeCompare(String(b.date)));}
     function p7RenderPassbook(){const m=p7Selected(),el=document.getElementById('p7PassbookPreview');if(!m){el.innerHTML='<div class="empty">Select a member to view passbook.</div>';return;}const r=p7Rows();el.innerHTML=r.length?`<table><thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Amount</th><th>Details</th></tr></thead><tbody>${r.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${escapeHtml(x.type)}</td><td>${escapeHtml(x.ref)}</td><td>${fmt(x.amount)}</td><td>${escapeHtml(x.details)}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No financial entries yet.</div>';}
-    document.getElementById('p7MemberSelect').addEventListener('change',p7Load);document.getElementById('p7SaveProfileBtn').addEventListener('click',p7Save);document.getElementById('p7Status').addEventListener('change',()=>{const m=p7Selected();if(m){m.status=document.getElementById('p7Status').value;saveData();renderMembers();}});document.getElementById('p7Photo').addEventListener('change',e=>{const f=e.target.files?.[0],m=p7Selected();if(!f||!m)return;if(f.size>1200000){toast('Photo 1.2 MB se chhoti rakhein');e.target.value='';return;}const rr=new FileReader();rr.onload=()=>{m.photo=rr.result;saveData();p7Load();};rr.readAsDataURL(f);});document.getElementById('p7ClearPhotoBtn').addEventListener('click',()=>{const m=p7Selected();if(!m)return;m.photo='';saveData();p7Load();});
+    document.getElementById('p7MemberSelect').addEventListener('change',p7Load);
+    document.getElementById('p7SaveProfileBtn').addEventListener('click',p7Save);
+    document.getElementById('p7Status').addEventListener('change',async()=>{
+      const m=p7Selected();if(!m)return;const next=document.getElementById('p7Status').value;if(next===m.status)return;
+      const ok=await pathpediConfirm({icon:next==='inactive'?'⏸️':'✅',title:next==='inactive'?'Deactivate Member?':'Activate Member?',message:`${m.name} ka status ${next==='inactive'?'Inactive':'Active'} karna hai?`,okText:next==='inactive'?'Deactivate':'Activate',danger:next==='inactive'});
+      if(!ok){document.getElementById('p7Status').value=m.status||'active';return;}m.status=next;saveData();renderMembers();
+    });
+    document.getElementById('p7Photo').addEventListener('change',e=>{
+      const f=e.target.files?.[0],m=p7Selected();if(!f||!m)return;
+      if(f.size>1200000){toast('Photo 1.2 MB se chhoti rakhein');e.target.value='';return;}
+      const rr=new FileReader();rr.onload=async()=>{
+        const ok=await pathpediConfirm({icon:'🖼️',title:'Update Member Photo?',message:`${m.name} ki profile photo update karni hai?`,okText:'Update Photo'});
+        if(!ok){e.target.value='';return;}m.photo=rr.result;saveData();p7Load();
+      };rr.readAsDataURL(f);
+    });
+    document.getElementById('p7ClearPhotoBtn').addEventListener('click',async()=>{
+      const m=p7Selected();if(!m||!m.photo)return;
+      const ok=await pathpediConfirm({icon:'🗑️',title:'Remove Member Photo?',message:`${m.name} ki profile photo remove karni hai?`,okText:'Remove Photo',danger:true});
+      if(!ok)return;m.photo='';saveData();p7Load();
+    });
     document.getElementById('p7PassbookBtn').addEventListener('click',()=>{
       const m=p7Selected();
       if(!m){toast('Member select karein');return;}
@@ -4227,7 +4401,7 @@ document.getElementById('saveMonthlyCloseBtn')?.addEventListener('click',saveMon
     function p8Render(){const id=document.getElementById('p8MemberSelect')?.value;if(!id){document.getElementById('p8EligibilityResult').innerHTML='<div class="empty">Select a member.</div>';document.getElementById('p8TopUpResult').innerHTML='<div class="empty">Select a member.</div>';return;}const e=p8Eligibility(id),st=p8Settings(),repaid=p8RepaidTotal(id);document.getElementById('p8EligibilityResult').innerHTML=`<div class="grid-4"><div class="stat-card"><div class="label">Total Deposits</div><div class="value">${fmt(e.deps)}</div></div><div class="stat-card loan"><div class="label">Active Loan Outstanding</div><div class="value">${fmt(e.out)}</div></div><div class="stat-card"><div class="label">Configured Loan Limit</div><div class="value">${fmt(e.limit)}</div></div><div class="stat-card profit"><div class="label">Available Limit</div><div class="value">${fmt(e.available)}</div></div></div><p style="margin-top:.8rem;"><strong>${e.available>0?'✅ Eligible within configured limit':'⚠️ Limit exceeded / no fresh limit available'}</strong> · ${st.loanMultiple}% of total deposits.</p>`;document.getElementById('p8TopUpResult').innerHTML=`<div class="calc-box"><div class="row"><span>Principal Repaid (all loans)</span><strong>${fmt(repaid)}</strong></div><div class="row"><span>Required Before Top-Up</span><strong>${fmt(st.minRepaid)}</strong></div><div class="row"><span>Current Active Loans</span><strong>${e.loans.length}</strong></div><div class="row"><span>Top-Up Status</span><strong>${repaid>=st.minRepaid&&e.available>0?'✅ Eligible':'⚠️ Review Required'}</strong></div></div><p style="color:var(--muted);font-size:.82rem;margin-top:.7rem;">This is a control/review check. Top-Up keeps the same Loan ID and increases principal outstanding only.</p>`;}
     function p8RenderAlerts(){const out=document.getElementById('p8Alerts'),rows=[];(data.loans||[]).filter(l=>l.status==='active'&&Number(l.outstanding||0)>0).forEach(l=>{const st=typeof phase3DueState==='function'?phase3DueState(l):null;if(st&&st.status==='Overdue')rows.push({level:'Overdue',loan:l,detail:`${st.overdueMonths} month(s) interest overdue`});});out.innerHTML=rows.length?`<table><thead><tr><th>Alert</th><th>Loan ID</th><th>Member</th><th>Outstanding</th><th>Details</th></tr></thead><tbody>${rows.map(r=>`<tr><td>🚨 <strong>${r.level}</strong></td><td>${escapeHtml(r.loan.id)}</td><td>${escapeHtml(memberName(r.loan.memberId))}</td><td>${fmt(r.loan.outstanding)}</td><td>${escapeHtml(r.detail)}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No overdue loan alerts.</div>';}
     function p8RenderRegister(){const el=document.getElementById('p8LoanRegister');const rows=(data.loans||[]).filter(l=>l.status==='active'&&Number(l.outstanding||0)>0);el.innerHTML=rows.length?`<table><thead><tr><th>Loan ID</th><th>Member</th><th>Outstanding</th><th>Interest Rate</th><th>Interest Status</th><th>Top-Up</th></tr></thead><tbody>${rows.map(l=>{const st=typeof phase3DueState==='function'?phase3DueState(l):null;const e=p8Eligibility(l.memberId);return `<tr><td><strong>${escapeHtml(l.id)}</strong></td><td>${escapeHtml(memberName(l.memberId))}</td><td>${fmt(l.outstanding)}</td><td>${escapeHtml(String(l.rate||0))}%</td><td>${st?escapeHtml(st.status):'—'}</td><td>${e.available>0?'Review':'Limit reached'}</td></tr>`}).join('')}</tbody></table>`:'<div class="empty">No active loans.</div>';}
-    function p8Init(){const st=p8Settings();if(!data.phase8Settings)data.phase8Settings={loanMultiple:st.loanMultiple,minRepaid:st.minRepaid};document.getElementById('p8LoanMultiple').value=st.loanMultiple;document.getElementById('p8MinRepaid').value=st.minRepaid;p8Populate();document.getElementById('p8MemberSelect')?.addEventListener('change',p8Render);document.getElementById('p8RefreshBtn')?.addEventListener('click',()=>{p8Render();p8RenderAlerts();p8RenderRegister();});document.getElementById('p8SaveSettingsBtn')?.addEventListener('click',()=>{data.phase8Settings={loanMultiple:Math.max(0,Number(document.getElementById('p8LoanMultiple').value||0)),minRepaid:Math.max(0,Number(document.getElementById('p8MinRepaid').value||0))};saveData();p8Render();p8RenderAlerts();p8RenderRegister();toast('Loan control settings saved');});p8Render();p8RenderAlerts();p8RenderRegister();}
+    function p8Init(){const st=p8Settings();if(!data.phase8Settings)data.phase8Settings={loanMultiple:st.loanMultiple,minRepaid:st.minRepaid};document.getElementById('p8LoanMultiple').value=st.loanMultiple;document.getElementById('p8MinRepaid').value=st.minRepaid;p8Populate();document.getElementById('p8MemberSelect')?.addEventListener('change',p8Render);document.getElementById('p8RefreshBtn')?.addEventListener('click',()=>{p8Render();p8RenderAlerts();p8RenderRegister();});document.getElementById('p8SaveSettingsBtn')?.addEventListener('click',async()=>{const loanMultiple=Math.max(0,Number(document.getElementById('p8LoanMultiple').value||0)),minRepaid=Math.max(0,Number(document.getElementById('p8MinRepaid').value||0));const ok=await pathpediConfirm({icon:'⚙️',title:'Save Loan Control Settings?',message:'Loan eligibility rules update karne hain?',body:`<div style="display:grid;gap:.4rem"><div style="display:flex;justify-content:space-between"><span>Loan multiple</span><strong>${loanMultiple}×</strong></div><div style="display:flex;justify-content:space-between"><span>Minimum repaid</span><strong>${fmt(minRepaid)}</strong></div></div>`,okText:'Save Settings'});if(!ok)return;data.phase8Settings={loanMultiple,minRepaid};saveData();p8Render();p8RenderAlerts();p8RenderRegister();toast('Loan control settings saved');});p8Render();p8RenderAlerts();p8RenderRegister();}
 
     // ========== PHASE 6 — DAILY OPERATIONS ==========
     function p6Active(x){ return x && x.status !== 'reversed' && x.status !== 'cancelled'; }
@@ -4257,8 +4431,22 @@ document.getElementById('saveMonthlyCloseBtn')?.addEventListener('click',saveMon
       out.innerHTML=`<table><thead><tr><th>Date</th><th>Type</th><th>Receipt / Ref</th><th>Member</th><th>Mode</th><th>In</th><th>Out</th><th>Details</th></tr></thead><tbody>${c.rows.map(r=>`<tr><td>${escapeHtml(day)}</td><td>${escapeHtml(r.type)}</td><td><strong>${escapeHtml(r.ref||'—')}</strong></td><td>${escapeHtml(r.member||'—')}</td><td>${escapeHtml(r.mode||'Unclassified')}</td><td>${r.direction==='in'?fmt(r.amount):'—'}</td><td>${r.direction==='out'?fmt(r.amount):'—'}</td><td>${escapeHtml(r.details||'')}</td></tr>`).join('')}</tbody></table>`;p6RenderReceiptRegister(c.rows);
     }
     function p6RenderReceiptRegister(rows){const el=document.getElementById('p6ReceiptRegister');if(!el)return;const a=rows.filter(x=>x.direction!=='transfer');el.innerHTML=a.length?`<table><thead><tr><th>Receipt / Voucher No.</th><th>Type</th><th>Member</th><th>Amount</th><th>Mode</th></tr></thead><tbody>${a.map(r=>`<tr><td><strong>${escapeHtml(r.ref||'—')}</strong></td><td>${escapeHtml(r.type)}</td><td>${escapeHtml(r.member)}</td><td>${fmt(r.amount)}</td><td>${escapeHtml(r.mode||'Unclassified')}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No receipts/vouchers for this date.</div>';}
-    function p6SaveClosing(){const day=document.getElementById('p6DayDate')?.value||today(),c=p6Calc(day),oc=Number(document.getElementById('p6OpeningCash')?.value||0),ob=Number(document.getElementById('p6OpeningBank')?.value||0);if(!Array.isArray(data.dailyClosings))data.dailyClosings=[];const rec={id:'DC'+Date.now(),transactionId:transactionId('DAY'),date:day,openingCash:oc,openingBank:ob,cashIn:c.ci,cashOut:c.co,bankIn:c.bi,bankOut:c.bo,closingCash:oc+c.ci-c.co,closingBank:ob+c.bi-c.bo,createdAt:new Date().toISOString()};data.dailyClosings.unshift(rec);auditLog('Daily Closing Saved',rec.transactionId,'Daily cash/bank closing saved','',rec.closingCash+rec.closingBank);saveData();p6RenderDayBook();toast('Daily closing saved');}
-    function p6SaveTransfer(){const date=document.getElementById('p6TransferDate')?.value||today(),from=document.getElementById('p6TransferFrom')?.value,to=document.getElementById('p6TransferTo')?.value,amount=Number(document.getElementById('p6TransferAmount')?.value||0),note=(document.getElementById('p6TransferNote')?.value||'').trim();if(from===to){toast('From aur To alag hona chahiye');return;}if(amount<=0){toast('Valid amount enter karein');return;}if(!Array.isArray(data.phase6Transfers))data.phase6Transfers=[];const rec={id:'TR'+Date.now(),transactionId:transactionId('TRF'),date,from,to,amount,note,createdAt:new Date().toISOString(),status:'active'};data.phase6Transfers.unshift(rec);auditLog('Cash/Bank Transfer',rec.transactionId,`${from} → ${to}`,'',amount);saveData();document.getElementById('p6TransferAmount').value='';document.getElementById('p6TransferNote').value='';p6RenderDayBook();p6RenderTransfers();toast('Transfer recorded');}
+    async function p6SaveClosing(){
+      const day=document.getElementById('p6DayDate')?.value||today(),c=p6Calc(day),oc=Number(document.getElementById('p6OpeningCash')?.value||0),ob=Number(document.getElementById('p6OpeningBank')?.value||0);
+      const closingCash=oc+c.ci-c.co,closingBank=ob+c.bi-c.bo;
+      const ok=await pathpediConfirm({icon:'📅',title:'Confirm Daily Closing?',message:`${day} ka cash/bank day book close karna hai?`,body:`<div style="display:grid;gap:.45rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:.85rem;"><div style="display:flex;justify-content:space-between"><span>Cash Closing</span><strong>${fmt(closingCash)}</strong></div><div style="display:flex;justify-content:space-between"><span>Bank Closing</span><strong>${fmt(closingBank)}</strong></div><div style="display:flex;justify-content:space-between;border-top:1px solid #e2e8f0;padding-top:.5rem"><strong>Total Closing</strong><strong>${fmt(closingCash+closingBank)}</strong></div></div>`,okText:'Save Closing'});
+      if(!ok)return;if(!Array.isArray(data.dailyClosings))data.dailyClosings=[];
+      const rec={id:'DC'+Date.now(),transactionId:transactionId('DAY'),date:day,openingCash:oc,openingBank:ob,cashIn:c.ci,cashOut:c.co,bankIn:c.bi,bankOut:c.bo,closingCash,closingBank,createdAt:new Date().toISOString()};
+      data.dailyClosings.unshift(rec);auditLog('Daily Closing Saved',rec.transactionId,'Daily cash/bank closing saved','',rec.closingCash+rec.closingBank);saveData();p6RenderDayBook();toast('Daily closing saved');
+    }
+    async function p6SaveTransfer(){
+      const date=document.getElementById('p6TransferDate')?.value||today(),from=document.getElementById('p6TransferFrom')?.value,to=document.getElementById('p6TransferTo')?.value,amount=Number(document.getElementById('p6TransferAmount')?.value||0),note=(document.getElementById('p6TransferNote')?.value||'').trim();
+      if(from===to){toast('From aur To alag hona chahiye');return;}if(amount<=0){toast('Valid amount enter karein');return;}
+      const ok=await pathpediConfirm({icon:'🔄',title:'Confirm Cash/Bank Transfer?',message:`${from} se ${to} mein transfer record karna hai?`,body:`<div style="display:grid;gap:.45rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:.85rem;"><div style="display:flex;justify-content:space-between"><span>Date</span><strong>${escapeHtml(date)}</strong></div><div style="display:flex;justify-content:space-between"><span>From</span><strong>${escapeHtml(from)}</strong></div><div style="display:flex;justify-content:space-between"><span>To</span><strong>${escapeHtml(to)}</strong></div><div style="display:flex;justify-content:space-between"><span>Amount</span><strong>${fmt(amount)}</strong></div><div><span style="color:#64748b">Note</span><br>${escapeHtml(note||'—')}</div></div>`,okText:'Record Transfer'});
+      if(!ok)return;if(!Array.isArray(data.phase6Transfers))data.phase6Transfers=[];
+      const rec={id:'TR'+Date.now(),transactionId:transactionId('TRF'),date,from,to,amount,note,createdAt:new Date().toISOString(),status:'active'};
+      data.phase6Transfers.unshift(rec);auditLog('Cash/Bank Transfer',rec.transactionId,`${from} → ${to}`,'',amount);saveData();document.getElementById('p6TransferAmount').value='';document.getElementById('p6TransferNote').value='';p6RenderDayBook();p6RenderTransfers();toast('Transfer recorded');
+    }
     function p6RenderTransfers(){const el=document.getElementById('p6TransferHistory');if(!el)return;const a=(data.phase6Transfers||[]).slice(0,20);el.innerHTML=a.length?`<table><thead><tr><th>Date</th><th>Ref</th><th>From</th><th>To</th><th>Amount</th><th>Note</th></tr></thead><tbody>${a.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${escapeHtml(x.transactionId||x.id)}</td><td>${escapeHtml(x.from)}</td><td>${escapeHtml(x.to)}</td><td>${fmt(x.amount)}</td><td>${escapeHtml(x.note||'')}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No transfers recorded.</div>';}
     function p6PrintDayBook(){
       const content=document.getElementById('p6DayBook')?.innerHTML||'';
@@ -4283,11 +4471,13 @@ document.getElementById('saveMonthlyCloseBtn')?.addEventListener('click',saveMon
       const rows=(st.snapshots||[]).map((x,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(x.timestamp)}</td><td>${fmt(x.size||0)} data size</td><td><button type="button" class="btn btn-sm btn-secondary" onclick="p10RestoreSnapshot(${i})">Restore</button></td></tr>`).join('');
       list.innerHTML=rows?`<table><thead><tr><th>#</th><th>Created</th><th>Size</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">No local snapshots.</div>';
     }
-    function p10SaveLock(){
+    async function p10SaveLock(){
       const st=p10Settings(), en=document.getElementById('p10LockEnabled').checked, pin=document.getElementById('p10LockPin').value.trim();
       if(en && !pin && !st.appLockPin){toast('App Lock ke liye PIN set karein');return;}
       if(pin && !/^\d{4,12}$/.test(pin)){toast('PIN 4–12 digits ka hona chahiye');return;}
-      st.appLockEnabled=en; if(pin) st.appLockPin=pin; saveData(); p10Render(); toast('Security settings saved');
+      const ok=await pathpediConfirm({icon:'🔐',title:'Save Security Settings?',message:`App Lock ${en?'enable':'disable'} karna hai${pin?' aur naya PIN save karna hai':''}?`,body:'<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:.8rem;color:#1e40af;">App Lock enable karne par app access ke liye PIN ki zarurat hogi.</div>',okText:'Save Settings',danger:!en});
+      if(!ok)return;
+      st.appLockEnabled=en;if(pin)st.appLockPin=pin;saveData();p10Render();document.getElementById('p10LockPin').value='';toast('Security settings saved');
     }
     function p10LockNow(){ const st=p10Settings(); if(!st.appLockPin){toast('Pehle App Lock PIN set karein');return;} p10ShowLock(); }
     function p10ShowLock(){
@@ -4301,12 +4491,35 @@ document.getElementById('saveMonthlyCloseBtn')?.addEventListener('click',saveMon
       try{const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12)),key=await p10Key(pw,salt);const plain=new TextEncoder().encode(JSON.stringify({version:1,createdAt:new Date().toISOString(),data}));const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,plain);const obj={format:'PATHPEDI-ENCRYPTED-BACKUP',version:1,salt:p10B64(salt),iv:p10B64(iv),ciphertext:p10B64(cipher)};downloadText('pathpedi_encrypted_backup.pedi',JSON.stringify(obj));document.getElementById('p10CryptoStatus').textContent='Encrypted backup created successfully.';toast('Encrypted backup downloaded');}catch(e){toast('Encrypted backup failed');}
     }
     async function p10EncryptedRestore(file){
-      const pw=document.getElementById('p10BackupPassword').value;if(pw.length<6){toast('Backup password enter karein');return;}
-      try{const obj=JSON.parse(await file.text());if(obj.format!=='PATHPEDI-ENCRYPTED-BACKUP')throw Error('format');const key=await p10Key(pw,p10Buf(obj.salt));const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:p10Buf(obj.iv)},key,p10Buf(obj.ciphertext));const payload=JSON.parse(new TextDecoder().decode(plain));if(!payload.data)throw Error('data');if(!confirm('Encrypted backup restore karne se current data replace hoga. Continue?'))return;data={...defaultData(),...payload.data};saveData();toast('Encrypted backup restored');}catch(e){toast('Restore failed: wrong password or invalid backup');}
+      const pw=document.getElementById('p10BackupPassword').value;
+      if(pw.length<6){toast('Backup password enter karein');return;}
+      try {
+        const obj=JSON.parse(await file.text());
+        if(obj.format!=='PATHPEDI-ENCRYPTED-BACKUP')throw Error('format');
+        const key=await p10Key(pw,p10Buf(obj.salt));
+        const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:p10Buf(obj.iv)},key,p10Buf(obj.ciphertext));
+        const payload=JSON.parse(new TextDecoder().decode(plain));
+        if(!payload.data)throw Error('data');
+        const ok=await pathpediConfirm({icon:'🔐',title:'Restore Encrypted Backup?',message:'Encrypted backup restore karne se current Pathpedi data replace hoga.',body:'<div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:12px;padding:.85rem;color:#9f1239;">Restore ke baad current data overwrite ho jayega. Confirm karein ki backup sahi hai.</div>',okText:'Restore Backup',danger:true});
+        if(!ok)return;
+        data={...defaultData(),...payload.data};saveData();toast('Encrypted backup restored');
+      } catch(e) { toast('Restore failed: wrong password or invalid backup'); }
     }
-    function p10Snapshot(){const st=p10Settings();const raw=JSON.stringify(data);st.snapshots.unshift({timestamp:new Date().toLocaleString('en-IN'),size:raw.length,data:JSON.parse(raw)});st.snapshots=st.snapshots.slice(0,5);saveData();p10Render();toast('Local snapshot created');}
-    function p10RestoreSnapshot(i){const st=p10Settings(),snap=st.snapshots[i];if(!snap||!confirm('Selected snapshot restore karein? Current data replace hoga.'))return;data={...defaultData(),...snap.data};saveData();toast('Snapshot restored');}
-    function p10ClearSnapshots(){const st=p10Settings();if(confirm('All local snapshots clear karein?')){st.snapshots=[];saveData();p10Render();toast('Snapshots cleared');}}
+    async function p10Snapshot(){
+      const ok=await pathpediConfirm({icon:'📸',title:'Create Local Snapshot?',message:'Current Pathpedi data ka local restore point save karna hai?',okText:'Create Snapshot'});
+      if(!ok)return;
+      const st=p10Settings(),raw=JSON.stringify(data);st.snapshots.unshift({timestamp:new Date().toLocaleString('en-IN'),size:raw.length,data:JSON.parse(raw)});st.snapshots=st.snapshots.slice(0,5);saveData();p10Render();toast('Local snapshot created');
+    }
+    async function p10RestoreSnapshot(i){
+      const st=p10Settings(),snap=st.snapshots[i];if(!snap)return;
+      const ok=await pathpediConfirm({icon:'♻️',title:'Restore Local Snapshot?',message:'Selected snapshot restore karne se current data replace hoga.',body:`<div style="color:#64748b;font-size:.86rem;">Snapshot date: ${escapeHtml(snap.timestamp||'Unknown')}<br>Data size: ${fmt(snap.size||0)}</div>`,okText:'Restore Snapshot',danger:true});
+      if(!ok)return;data={...defaultData(),...snap.data};saveData();toast('Snapshot restored');
+    }
+    async function p10ClearSnapshots(){
+      const st=p10Settings();if(!st.snapshots?.length){toast('No snapshots to clear');return;}
+      const ok=await pathpediConfirm({icon:'🗑️',title:'Clear All Snapshots?',message:`${st.snapshots.length} local snapshot(s) permanently remove karne hain?`,okText:'Clear Snapshots',danger:true});
+      if(!ok)return;st.snapshots=[];saveData();p10Render();toast('Snapshots cleared');
+    }
     function downloadText(name,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
     document.getElementById('p10SaveLockBtn')?.addEventListener('click',p10SaveLock);
     document.getElementById('p10LockNowBtn')?.addEventListener('click',p10LockNow);
