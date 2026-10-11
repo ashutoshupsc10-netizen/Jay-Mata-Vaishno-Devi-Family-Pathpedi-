@@ -5,6 +5,7 @@ import android.app.Dialog
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -18,6 +19,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -33,6 +35,8 @@ import java.io.FileOutputStream
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
+    private val fileChooserRequestCode = 4107
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -74,7 +78,40 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        webView.webChromeClient = WebChromeClient()
+        // Android WebView needs an explicit file chooser handler for HTML
+        // <input type="file"> controls used by Restore from Backup.
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(
+                view: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                this@MainActivity.filePathCallback?.onReceiveValue(null)
+                this@MainActivity.filePathCallback = filePathCallback
+
+                return try {
+                    val chooserIntent = fileChooserParams?.createIntent()
+                        ?: Intent(Intent.ACTION_GET_CONTENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = "application/json"
+                        }
+                    if (chooserIntent.type.isNullOrBlank()) {
+                        chooserIntent.type = "*/*"
+                    }
+                    startActivityForResult(chooserIntent, fileChooserRequestCode)
+                    true
+                } catch (e: Exception) {
+                    this@MainActivity.filePathCallback?.onReceiveValue(null)
+                    this@MainActivity.filePathCallback = null
+                    Toast.makeText(
+                        this@MainActivity,
+                        "File picker open nahi hua. Files app se try karein.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    false
+                }
+            }
+        }
         setContentView(webView)
 
         webView.loadUrl("file:///android_asset/Pathpedi.html")
@@ -93,6 +130,22 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         )
+    }
+
+    @Deprecated("Deprecated in Android, kept for WebView file chooser compatibility")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == fileChooserRequestCode) {
+            val callback = filePathCallback ?: return
+            val result: Array<Uri>? = if (resultCode == RESULT_OK) {
+                val selectedUri = data?.data
+                selectedUri?.let { arrayOf(it) }
+            } else {
+                null
+            }
+            callback.onReceiveValue(result)
+            filePathCallback = null
+        }
     }
 
     override fun onResume() {
