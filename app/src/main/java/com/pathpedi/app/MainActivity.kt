@@ -501,6 +501,94 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        /**
+         * Save Excel XML Spreadsheet (.xls) to Downloads/Pathpedi.
+         * Used by the Full Excel Export button in the HTML WebView.
+         */
+        @JavascriptInterface
+        fun saveExcel(filename: String, base64Data: String): Boolean {
+            val activity = context as? MainActivity ?: return false
+
+            return try {
+                val safeName = filename
+                    .replace("/", "_")
+                    .replace("\\", "_")
+                    .ifBlank { "pathpedi_full_excel.xls" }
+
+                val bytes = Base64.decode(base64Data, Base64.DEFAULT)
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val values = ContentValues().apply {
+                        put(MediaStore.Downloads.DISPLAY_NAME, safeName)
+                        put("mime_type", "application/vnd.ms-excel")
+                        put(
+                            MediaStore.Downloads.RELATIVE_PATH,
+                            Environment.DIRECTORY_DOWNLOADS + "/Pathpedi/"
+                        )
+                        put(MediaStore.Downloads.IS_PENDING, 1)
+                    }
+
+                    val resolver = activity.contentResolver
+                    val uri = resolver.insert(
+                        MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                        values
+                    ) ?: throw Exception("Excel file could not be created")
+
+                    try {
+                        resolver.openOutputStream(uri)?.use { output ->
+                            output.write(bytes)
+                            output.flush()
+                        } ?: throw Exception("Could not open Excel output stream")
+
+                        val done = ContentValues().apply {
+                            put(MediaStore.Downloads.IS_PENDING, 0)
+                        }
+                        resolver.update(uri, done, null, null)
+
+                        activity.runOnUiThread {
+                            Toast.makeText(
+                                activity,
+                                "Excel saved: Downloads/Pathpedi/$safeName",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                        true
+                    } catch (e: Exception) {
+                        resolver.delete(uri, null, null)
+                        throw e
+                    }
+                } else {
+                    val downloads = Environment.getExternalStoragePublicDirectory(
+                        Environment.DIRECTORY_DOWNLOADS
+                    )
+                    val folder = File(downloads, "Pathpedi")
+                    if (!folder.exists() && !folder.mkdirs()) {
+                        throw Exception("Could not create Downloads/Pathpedi")
+                    }
+                    File(folder, safeName).writeBytes(bytes)
+
+                    activity.runOnUiThread {
+                        Toast.makeText(
+                            activity,
+                            "Excel saved: Downloads/Pathpedi/$safeName",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    true
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                activity.runOnUiThread {
+                    Toast.makeText(
+                        activity,
+                        "Excel save failed: ${e.message ?: "Unknown error"}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                false
+            }
+        }
+
         @JavascriptInterface
         fun saveBackup(filename: String, base64Data: String): Boolean {
 
