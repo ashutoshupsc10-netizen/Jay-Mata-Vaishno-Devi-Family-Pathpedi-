@@ -4153,8 +4153,45 @@ document.getElementById('saveMonthlyCloseBtn')?.addEventListener('click',saveMon
       sheets.push(p4Sheet('Cash Closing',['Date','Cash','Bank','Expected','Difference','Note'],(data.cashClosings||[]).map(x=>[x.date,x.cash||0,x.bank||0,x.expected||0,x.difference||0,x.note||''])));
       sheets.push(p4Sheet('Member Annual FY',['FY','Member ID','Member','Deposits','Late Fine','Loan Issued','Top-Up','Principal Repaid','Interest Paid','Profit Received','Outstanding'],(data.members||[]).map(m=>{const x=p4MemberAnnualSummary(m.id,fy);return[fy,m.id,m.name,x.deposits,x.fines,x.loanIssued,x.topups,x.repaid,x.interest,x.profit,x.outstanding];})));
       sheets.push(p4Sheet('Loan Annual FY',['FY','Loan ID','Member','Original Principal','FY Top-Up','FY Principal Repaid','FY Interest Paid','Current Outstanding','Status'],(data.loans||[]).map(l=>{const x=p4LoanAnnualRows(l.id,fy);return[fy,l.id,memberName(l.memberId),l.principal||0,x.rows.filter(r=>r.type==='Top-Up').reduce((s,r)=>s+r.amount,0),x.rows.filter(r=>r.type==='Principal Repayment').reduce((s,r)=>s+r.amount,0),x.rows.filter(r=>r.type==='Interest Paid').reduce((s,r)=>s+r.amount,0),l.outstanding||0,l.status||'active'];})));
-      const xml=`<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1"/></Style></Styles>${sheets.join('')}</Workbook>`;
-      const blob=new Blob([xml],{type:'application/vnd.ms-excel'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='pathpedi_full_excel_FY_'+fy.replace('-','_')+'.xls';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);auditLog('Full Excel Export',fy,'All accounting sheets exported',null,0);saveData();toast('Full Excel workbook exported');
+      const xml=`<?xml version="1.0" encoding="UTF-8"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1"/></Style></Styles>${sheets.join('')}</Workbook>`;
+      const filename='pathpedi_full_excel_FY_'+fy.replace('-','_')+'.xls';
+
+      // Android WebView does not reliably download Blob/object URLs.
+      // Use the native bridge in the APK; use a normal download in browser.
+      if(window.AndroidPrint && typeof AndroidPrint.saveExcel === 'function'){
+        try{
+          const bytes=new TextEncoder().encode(xml);
+          let binary='';
+          const chunkSize=0x8000;
+          for(let i=0;i<bytes.length;i+=chunkSize){
+            binary+=String.fromCharCode(...bytes.subarray(i,i+chunkSize));
+          }
+          const saved=AndroidPrint.saveExcel(filename,btoa(binary));
+          if(saved){
+            auditLog('Full Excel Export',fy,'All accounting sheets exported to Downloads/Pathpedi',null,0);
+            saveData();
+            toast('Full Excel workbook saved in Downloads/Pathpedi');
+            return;
+          }
+          toast('Excel save failed. Browser download try kar rahe hain.');
+        }catch(e){
+          console.error('Android Excel export failed:',e);
+          toast('Excel save failed. Browser download try kar rahe hain.');
+        }
+      }
+
+      const blob=new Blob([xml],{type:'application/vnd.ms-excel;charset=utf-8'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url;
+      a.download=filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1500);
+      auditLog('Full Excel Export',fy,'All accounting sheets export requested',null,0);
+      saveData();
+      toast('Full Excel workbook export requested');
     }
     function renderPhase4(){
       const fy=currentFY(); ['p4FY','p4MemberFY','p4LoanFY','p4ExcelFY'].forEach(id=>p4FYOptions(id,fy));
