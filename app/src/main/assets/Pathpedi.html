@@ -441,6 +441,13 @@
           <div class="value" id="dashProfit">₹0</div>
         </div>
       </div>
+      <div class="grid-2" style="margin-bottom:1rem;">
+        <div class="stat-card" style="border-left:5px solid #0f766e;background:linear-gradient(135deg,#ecfdf5,#ffffff);">
+          <div class="label">💰 Total Available Pathpedi Balance</div>
+          <div class="value" id="dashAvailableBalance">₹0</div>
+          <div id="dashAvailableBalanceNote" style="font-size:.78rem;color:var(--muted);margin-top:.35rem;">Based on saved daily closing and later transactions</div>
+        </div>
+      </div>
       <div class="grid-2" style="margin-bottom:1.25rem;">
         <div class="stat-card profit">
           <div class="label">Profit per Member (Interest + Late Fine ÷ Members)</div>
@@ -3929,9 +3936,45 @@ toast('Android CSV save failed');
       </tr>`).join('');
     }
 
+    // Total available balance = latest saved daily closing + later receipts - later payments.
+    // If no daily closing exists, show net movement from recorded transactions starting at zero.
+    function calculateTotalAvailableBalance(){
+      // Dashboard available balance is a separate principal-funds view:
+      // monthly deposits + principal repayments - loans disbursed - loan top-ups.
+      // Collected interest and late fines are Pathpedi profit and are deliberately excluded.
+      const active = x => x && x.status !== 'reversed' && x.status !== 'cancelled';
+      let balance = 0;
+
+      (data.deposits || []).filter(active).forEach(x => {
+        // Do not add x.lateFine here; only the member's monthly deposit counts.
+        balance += Number(x.amount || 0);
+      });
+      (data.repayments || []).filter(active).forEach(x => {
+        // Use principal portion when present; otherwise repayment amount is principal.
+        balance += Number(x.principalPart ?? x.amount ?? 0);
+      });
+      (data.loans || []).filter(active).forEach(x => {
+        balance -= Number(x.principal || 0);
+      });
+      (data.loanTopUps || []).filter(active).forEach(x => {
+        balance -= Number(x.amount || 0);
+      });
+
+      // Intentionally do not add collected interest/fines or subtract profit distribution:
+      // those profit amounts were never included in this principal-funds balance.
+      return { balance, hasClosing: false, closingDate: '' };
+    }
+
     function renderDashboard() {
       document.getElementById('dashMembers').textContent = data.members.length;
       document.getElementById('dashDeposits').textContent = fmt(totalDeposits());
+      const available = calculateTotalAvailableBalance();
+      const availableEl = document.getElementById('dashAvailableBalance');
+      if (availableEl) availableEl.textContent = fmt(available.balance);
+      const availableNote = document.getElementById('dashAvailableBalanceNote');
+      if (availableNote) {
+        availableNote.textContent = 'Monthly deposits + principal repayments − loans disbursed/top-ups; interest and late fines excluded';
+      }
       document.getElementById('dashLoans').textContent = fmt(totalOutstanding());
       const profit = interestCollectedOnly();
       const totalProfit = profit;
